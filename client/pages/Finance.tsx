@@ -73,6 +73,7 @@ export default function Finance() {
   // Student Fees State
   const [studentFees, setStudentFees] = useState<StudentFee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>("all");
   const [selectedStudent, setSelectedStudent] = useState<StudentFee | null>(null);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -392,12 +393,37 @@ export default function Finance() {
     }
   };
 
-  const filteredStudentFees = studentFees.filter(
-    (sf) =>
+  const filteredStudentFees = studentFees.filter((sf) => {
+    // Filter by search query
+    const matchesSearch =
       sf.student_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sf.student_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sf.class.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      sf.class.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Filter by class
+    const matchesClass = selectedClassFilter === "all" || sf.class === selectedClassFilter;
+
+    return matchesSearch && matchesClass;
+  });
+
+  // Calculate class summary
+  const classSummary = availableClasses.map((cls) => {
+    const classStudents = studentFees.filter((sf) => sf.class === cls);
+    const totalFees = classStudents.reduce((sum, sf) => sum + Number(sf.total_fee_amount), 0);
+    const totalPaid = classStudents.reduce((sum, sf) => sum + Number(sf.total_paid), 0);
+    const totalBalance = classStudents.reduce((sum, sf) => sum + Number(sf.balance), 0);
+    const paidCount = classStudents.filter((sf) => sf.payment_status === "paid").length;
+    
+    return {
+      class: cls,
+      studentCount: classStudents.length,
+      totalFees,
+      totalPaid,
+      totalBalance,
+      paidCount,
+      collectionRate: totalFees > 0 ? (totalPaid / totalFees) * 100 : 0,
+    };
+  }).filter((summary) => summary.studentCount > 0);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -426,7 +452,7 @@ export default function Finance() {
     <Layout title="Finance" subtitle="Manage school finances, fees, and payments">
       <div className="space-y-6">
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-border/50 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -435,7 +461,7 @@ export default function Finance() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">GH₵ {stats.totalRevenue.toFixed(2)}</div>
+              <div className="text-xl sm:text-2xl font-bold">GH₵ {stats.totalRevenue.toFixed(2)}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 This academic year
               </p>
@@ -450,7 +476,7 @@ export default function Finance() {
               <CreditCard className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">GH₵ {stats.outstanding.toFixed(2)}</div>
+              <div className="text-xl sm:text-2xl font-bold">GH₵ {stats.outstanding.toFixed(2)}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Pending payments
               </p>
@@ -465,7 +491,7 @@ export default function Finance() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">GH₵ {stats.collectedToday.toFixed(2)}</div>
+              <div className="text-xl sm:text-2xl font-bold">GH₵ {stats.collectedToday.toFixed(2)}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Today's collections
               </p>
@@ -480,7 +506,7 @@ export default function Finance() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.collectionRate.toFixed(1)}%</div>
+              <div className="text-xl sm:text-2xl font-bold">{stats.collectionRate.toFixed(1)}%</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Payment completion
               </p>
@@ -490,8 +516,8 @@ export default function Finance() {
 
         {/* Main Content */}
         <Tabs defaultValue="students" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="students">Student Payments</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="students">Payments</TabsTrigger>
             <TabsTrigger value="class-fees">Class Fees</TabsTrigger>
           </TabsList>
 
@@ -499,33 +525,111 @@ export default function Finance() {
           <TabsContent value="students" className="space-y-4">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4">
                   <CardTitle>Student Payments</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Class Filter Dropdown */}
+                    <div className="w-full sm:w-48">
+                      <select
+                        value={selectedClassFilter}
+                        onChange={(e) => setSelectedClassFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
+                      >
+                        <option value="all">All Classes</option>
+                        {availableClasses.map((cls) => (
+                          <option key={cls} value={cls}>
+                            {cls}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Search Input */}
+                    <div className="relative flex-1">
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search students..."
+                        placeholder="Search by name or student number..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-8 w-64"
+                        className="pl-8 w-full"
                       />
                     </div>
                   </div>
+                  {/* Results count */}
+                  <div className="text-sm text-muted-foreground">
+                    Showing {filteredStudentFees.length} of {studentFees.length} students
+                    {selectedClassFilter !== "all" && ` in ${selectedClassFilter}`}
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
+                {/* Class Summary - Only show when "All Classes" is selected */}
+                {selectedClassFilter === "all" && classSummary.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold">Summary by Class</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {classSummary.map((summary) => (
+                        <Card
+                          key={summary.class}
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => setSelectedClassFilter(summary.class)}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-lg">{summary.class}</h4>
+                              <Badge variant="outline">{summary.studentCount} students</Badge>
+                            </div>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Total Fees:</span>
+                                <span className="font-medium">GH₵ {summary.totalFees.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Collected:</span>
+                                <span className="font-medium text-green-600">GH₵ {summary.totalPaid.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Balance:</span>
+                                <span className="font-medium text-orange-600">GH₵ {summary.totalBalance.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t">
+                                <span className="text-muted-foreground">Paid:</span>
+                                <span className="font-medium">{summary.paidCount}/{summary.studentCount}</span>
+                              </div>
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="text-muted-foreground">Collection Rate</span>
+                                  <span className="font-semibold">{summary.collectionRate.toFixed(1)}%</span>
+                                </div>
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-primary transition-all"
+                                    style={{ width: `${summary.collectionRate}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Student Table */}
+                <div className="overflow-x-auto -mx-6 sm:mx-0">
+                  <div className="inline-block min-w-full align-middle">
+                    <div className="overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Student Number</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Class</TableHead>
-                      <TableHead className="text-right">Total Fee</TableHead>
-                      <TableHead className="text-right">Paid</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Action</TableHead>
+                      <TableHead className="whitespace-nowrap">Student No.</TableHead>
+                      <TableHead className="whitespace-nowrap">Name</TableHead>
+                      <TableHead className="whitespace-nowrap">Class</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Total Fee</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Paid</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Balance</TableHead>
+                      <TableHead className="whitespace-nowrap">Status</TableHead>
+                      <TableHead className="whitespace-nowrap">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -538,16 +642,16 @@ export default function Finance() {
                     ) : (
                       filteredStudentFees.map((sf) => (
                         <TableRow key={sf.id}>
-                          <TableCell className="font-medium">{sf.student_number}</TableCell>
-                          <TableCell>{sf.student_name}</TableCell>
-                          <TableCell>{sf.class}</TableCell>
-                          <TableCell className="text-right">GH₵ {Number(sf.total_fee_amount).toFixed(2)}</TableCell>
-                          <TableCell className="text-right">GH₵ {Number(sf.total_paid).toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-semibold">
+                          <TableCell className="font-medium whitespace-nowrap">{sf.student_number}</TableCell>
+                          <TableCell className="whitespace-nowrap">{sf.student_name}</TableCell>
+                          <TableCell className="whitespace-nowrap">{sf.class}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">GH₵ {Number(sf.total_fee_amount).toFixed(2)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">GH₵ {Number(sf.total_paid).toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-semibold whitespace-nowrap">
                             GH₵ {Number(sf.balance).toFixed(2)}
                           </TableCell>
-                          <TableCell>{getStatusBadge(sf.payment_status)}</TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">{getStatusBadge(sf.payment_status)}</TableCell>
+                          <TableCell className="whitespace-nowrap">
                             {sf.payment_status !== "paid" && (
                               <div className="flex gap-2">
                                 <Button
@@ -557,7 +661,7 @@ export default function Finance() {
                                     setIsPaymentDialogOpen(true);
                                   }}
                                 >
-                                  Record Payment
+                                  Pay
                                 </Button>
                                 <Button
                                   size="sm"
@@ -582,7 +686,7 @@ export default function Finance() {
                                   setIsHistoryDialogOpen(true);
                                 }}
                               >
-                                View History
+                                History
                               </Button>
                             )}
                           </TableCell>
@@ -591,6 +695,9 @@ export default function Finance() {
                     )}
                   </TableBody>
                 </Table>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -599,11 +706,11 @@ export default function Finance() {
           <TabsContent value="class-fees" className="space-y-4">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <CardTitle>Class Fees</CardTitle>
                   <Dialog open={isSetFeeDialogOpen} onOpenChange={setIsSetFeeDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button>
+                      <Button className="w-full sm:w-auto">
                         <Plus className="w-4 h-4 mr-2" />
                         Set Class Fee
                       </Button>
@@ -670,14 +777,17 @@ export default function Finance() {
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto -mx-6 sm:mx-0">
+                  <div className="inline-block min-w-full align-middle">
+                    <div className="overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Class</TableHead>
-                      <TableHead>Academic Year</TableHead>
-                      <TableHead>Term</TableHead>
-                      <TableHead className="text-right">Fee Amount</TableHead>
-                      <TableHead>Description</TableHead>
+                      <TableHead className="whitespace-nowrap">Class</TableHead>
+                      <TableHead className="whitespace-nowrap">Academic Year</TableHead>
+                      <TableHead className="whitespace-nowrap">Term</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Fee Amount</TableHead>
+                      <TableHead className="whitespace-nowrap">Description</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -690,18 +800,21 @@ export default function Finance() {
                     ) : (
                       classFees.map((cf) => (
                         <TableRow key={cf.id}>
-                          <TableCell className="font-medium">{cf.class}</TableCell>
-                          <TableCell>{cf.academic_year}</TableCell>
-                          <TableCell>{cf.term || "Full Year"}</TableCell>
-                          <TableCell className="text-right font-semibold">
+                          <TableCell className="font-medium whitespace-nowrap">{cf.class}</TableCell>
+                          <TableCell className="whitespace-nowrap">{cf.academic_year}</TableCell>
+                          <TableCell className="whitespace-nowrap">{cf.term || "Full Year"}</TableCell>
+                          <TableCell className="text-right font-semibold whitespace-nowrap">
                             GH₵ {Number(cf.fee_amount).toFixed(2)}
                           </TableCell>
-                          <TableCell>{cf.description || "-"}</TableCell>
+                          <TableCell className="whitespace-nowrap">{cf.description || "-"}</TableCell>
                         </TableRow>
                       ))
                     )}
                   </TableBody>
                 </Table>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

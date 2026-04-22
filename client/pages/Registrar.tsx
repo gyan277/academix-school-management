@@ -338,8 +338,24 @@ export default function Registrar() {
         {/* STUDENTS TAB */}
         <TabsContent value="students" className="space-y-6 mt-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex-1 w-full sm:max-w-xs">
-              <div className="relative">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full">
+              {/* Class Filter Dropdown */}
+              <div className="w-full sm:w-48">
+                <select
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm h-10"
+                >
+                  <option value="">All Classes</option>
+                  {classes.map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* Search Input */}
+              <div className="relative flex-1 sm:max-w-xs">
                 <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by name or ID..."
@@ -351,7 +367,7 @@ export default function Registrar() {
             </div>
             <Dialog open={isStudentDialogOpen} onOpenChange={setIsStudentDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2">
+                <Button className="gap-2 w-full sm:w-auto">
                   <UserPlus className="w-4 h-4" />
                   Add Student
                 </Button>
@@ -447,6 +463,12 @@ export default function Registrar() {
                 </div>
               </DialogContent>
             </Dialog>
+          </div>
+
+          {/* Results Counter */}
+          <div className="text-sm text-muted-foreground">
+            Showing {filteredStudents.length} of {students.length} students
+            {selectedClass && ` in ${selectedClass}`}
           </div>
 
           {/* Students List */}
