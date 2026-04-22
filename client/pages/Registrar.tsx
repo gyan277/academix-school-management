@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 interface Student {
   id: string;
   student_id: string;
+  student_number: string;
   full_name: string;
   date_of_birth: string;
   gender: string;
@@ -114,7 +115,8 @@ export default function Registrar() {
   const filteredStudents = students.filter((student) => {
     const matchesSearch =
       student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.student_id.includes(searchTerm);
+      (student.student_number && student.student_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (student.student_id && student.student_id.includes(searchTerm));
     const matchesClass = !selectedClass || student.class === selectedClass;
     return matchesSearch && matchesClass;
   });
@@ -478,7 +480,7 @@ export default function Registrar() {
                         <div className="flex items-center gap-3 mb-2">
                           <h4 className="font-semibold text-foreground">{student.full_name}</h4>
                           <Badge variant="outline" className="text-xs">
-                            {student.student_id}
+                            {student.student_number || student.student_id || 'No ID'}
                           </Badge>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm text-muted-foreground">
@@ -566,7 +568,7 @@ export default function Registrar() {
                       >
                         <div>
                           <p className="font-medium text-foreground">{student.full_name}</p>
-                          <p className="text-sm text-muted-foreground">{student.student_id}</p>
+                          <p className="text-sm text-muted-foreground">{student.student_number || student.student_id || 'No ID'}</p>
                         </div>
                         <Badge>{student.gender}</Badge>
                       </div>
