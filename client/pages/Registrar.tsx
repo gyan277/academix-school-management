@@ -145,15 +145,10 @@ export default function Registrar() {
     }
 
     try {
-      // Generate student ID
-      const count = students.length + 1;
-      const studentId = `STU${String(count).padStart(4, "0")}`;
-
       const { data, error } = await supabase
         .from("students")
         .insert([
           {
-            student_id: studentId,
             full_name: newStudent.name,
             date_of_birth: newStudent.dob,
             gender: newStudent.gender,
@@ -242,15 +237,10 @@ export default function Registrar() {
     }
 
     try {
-      // Generate staff ID
-      const count = staff.length + 1;
-      const staffId = `STF${String(count).padStart(4, "0")}`;
-
       const { data, error } = await supabase
         .from("staff")
         .insert([
           {
-            staff_id: staffId,
             full_name: newStaff.name,
             phone: newStaff.phone,
             position: newStaff.position,
