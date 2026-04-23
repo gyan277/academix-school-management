@@ -55,18 +55,30 @@ export function TeacherManagementInterface() {
   const [credentialsToShow, setCredentialsToShow] = useState<Credentials | null>(null);
   const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
-  // Load teachers on mount
+  // Load teachers on mount - wait for profile to load
   useEffect(() => {
-    loadTeachers();
-    loadAvailableClasses();
-  }, []);
+    if (profile?.school_id) {
+      loadTeachers();
+      loadAvailableClasses();
+    }
+  }, [profile?.school_id]);
 
   /**
    * Fetch all teachers from database with their class assignments
+   * CRITICAL: Filter by school_id for multi-tenancy
    */
   async function loadTeachers() {
     try {
       setLoading(true);
+      
+      // CRITICAL: Must have school_id to load teachers
+      if (!profile?.school_id) {
+        console.log("⚠️ Profile school_id not loaded yet, waiting...");
+        setLoading(false);
+        return;
+      }
+
+      console.log("🔍 Loading teachers for school_id:", profile.school_id);
       
       const { data: teachersData, error } = await supabase
         .from('users')
@@ -77,10 +89,11 @@ export function TeacherManagementInterface() {
           )
         `)
         .eq('role', 'teacher')
+        .eq('school_id', profile.school_id) // EXPLICIT school_id filter
         .order('full_name', { ascending: true });
 
       if (error) {
-        console.error('Error loading teachers:', error);
+        console.error('❌ Error loading teachers:', error);
         toast({
           title: 'Error Loading Teachers',
           description: mapDatabaseError(error),
@@ -88,6 +101,8 @@ export function TeacherManagementInterface() {
         });
         return;
       }
+
+      console.log("✅ Loaded teachers:", teachersData?.length || 0, "teachers");
 
       // Transform data to include assigned_classes array
       const transformedTeachers: TeacherProfile[] = (teachersData || []).map((teacher: any) => ({
@@ -117,13 +132,20 @@ export function TeacherManagementInterface() {
 
   /**
    * Fetch available classes from students table
+   * CRITICAL: Filter by school_id for multi-tenancy
    */
   async function loadAvailableClasses() {
     try {
+      if (!profile?.school_id) {
+        console.log("⚠️ Profile school_id not loaded yet for classes");
+        return;
+      }
+
       const { data: classData, error } = await supabase
         .from('students')
         .select('class')
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .eq('school_id', profile.school_id); // EXPLICIT school_id filter
 
       if (error) {
         console.error('Error loading classes:', error);
@@ -142,10 +164,26 @@ export function TeacherManagementInterface() {
    */
   async function handleCreateTeacher(data: CreateTeacherData) {
     try {
+      // CRITICAL: Check if admin has school_id
+      if (!profile?.school_id) {
+        console.error("❌ Cannot create teacher: Admin school_id is NULL");
+        console.error("Admin profile:", profile);
+        toast({
+          title: 'School ID Missing',
+          description: 'Your account is missing a school_id. Please run FIX_NEW_ADMIN_SCHOOL_ID.sql in Supabase, then logout and login again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      console.log("✅ Creating teacher with admin school_id:", profile.school_id);
+
       // Step 1: Create auth user using signUp
       // IMPORTANT: We need to prevent auto-login so admin stays logged in
       // We'll use a workaround by storing current session and restoring it
       const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      console.log("📝 Creating auth user for:", data.email);
       
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
@@ -155,6 +193,7 @@ export function TeacherManagementInterface() {
             full_name: data.full_name,
             role: 'teacher',
             phone: data.phone,
+            school_id: profile.school_id, // Pass school_id in metadata
           },
           emailRedirectTo: undefined, // Prevent email confirmation redirect
         },
@@ -169,16 +208,20 @@ export function TeacherManagementInterface() {
       }
 
       if (authError) {
-        console.error('Auth error:', authError);
+        console.error('❌ Auth error:', authError);
+        console.error('Error code:', authError.code);
+        console.error('Error message:', authError.message);
+        console.error('Error status:', authError.status);
         toast({
           title: 'Failed to Create Teacher',
-          description: mapAuthError(authError.message),
+          description: mapAuthError(authError.message) + ` (${authError.code || 'unknown'})`,
           variant: 'destructive',
         });
         return;
       }
 
       if (!authData.user) {
+        console.error('❌ No user data returned from auth');
         toast({
           title: 'Failed to Create Teacher',
           description: 'No user data returned from authentication service.',
@@ -186,6 +229,8 @@ export function TeacherManagementInterface() {
         });
         return;
       }
+
+      console.log("✅ Auth user created:", authData.user.id);
 
       // Step 2: Update user profile (trigger should have created it)
       // Wait a moment for the trigger to complete
@@ -198,6 +243,7 @@ export function TeacherManagementInterface() {
           phone: data.phone,
           role: 'teacher',
           status: 'active',
+          school_id: profile?.school_id, // CRITICAL: Set school_id
         })
         .eq('id', authData.user.id);
 
@@ -213,6 +259,7 @@ export function TeacherManagementInterface() {
             role: 'teacher',
             phone: data.phone,
             status: 'active',
+            school_id: profile?.school_id, // CRITICAL: Set school_id
           });
 
         if (insertError) {

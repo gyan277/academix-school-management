@@ -164,12 +164,17 @@ export default function Registrar() {
 
     if (!profile?.school_id) {
       toast({
-        title: "Error",
-        description: "School information not found. Please contact support.",
+        title: "School ID Missing",
+        description: "Your account is missing a school_id. Please contact support or run the FIX_NEW_ADMIN_SCHOOL_ID.sql script in Supabase.",
         variant: "destructive",
       });
+      console.error("❌ Cannot add student: Admin school_id is NULL");
+      console.error("Admin profile:", profile);
+      console.error("Run FIX_NEW_ADMIN_SCHOOL_ID.sql to fix this issue");
       return;
     }
+
+    console.log("✅ Adding student with school_id:", profile.school_id);
 
     try {
       const { data, error } = await supabase
@@ -190,8 +195,12 @@ export default function Registrar() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Database error:", error);
+        throw error;
+      }
 
+      console.log("✅ Student added successfully:", data);
       setStudents([...students, data]);
       setNewStudent({
         name: "",
@@ -207,11 +216,11 @@ export default function Registrar() {
         title: "Success",
         description: `Student ${newStudent.name} added successfully`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding student:", error);
       toast({
         title: "Error",
-        description: "Failed to add student to database",
+        description: error.message || "Failed to add student to database",
         variant: "destructive",
       });
     }
