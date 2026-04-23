@@ -554,6 +554,7 @@ export default function SettingsPage() {
 
   const handleSaveProfile = async () => {
     if (!profile?.school_id) {
+      console.error('No school_id in profile');
       toast({
         title: "Error",
         description: "School information not found.",
@@ -562,33 +563,59 @@ export default function SettingsPage() {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('school_settings')
-        .upsert({
-          school_id: profile.school_id,
-          school_name: schoolName,
-          school_address: schoolAddress,
-          school_phone: schoolPhone,
-          school_email: schoolEmail,
-          current_academic_year: academicYear,
-          school_logo_url: logoPreview,
-          headmaster_signature_url: signaturePreview,
-        }, {
-          onConflict: 'school_id',
-        });
+    console.log('Saving profile for school_id:', profile.school_id);
+    console.log('Data to save:', {
+      school_name: schoolName,
+      school_address: schoolAddress,
+      school_phone: schoolPhone,
+      school_email: schoolEmail,
+      current_academic_year: academicYear,
+      current_term: currentTerm,
+    });
 
-      if (error) throw error;
+    try {
+      // First check if record exists
+      const { data: existing } = await supabase
+        .from('school_settings')
+        .select('id')
+        .eq('school_id', profile.school_id)
+        .single();
+
+      console.log('Existing record:', existing);
+
+      const updateData = {
+        school_id: profile.school_id,
+        school_name: schoolName || null,
+        school_address: schoolAddress || null,
+        school_phone: schoolPhone || null,
+        school_email: schoolEmail || null,
+        current_academic_year: academicYear || '2024/2025',
+        current_term: currentTerm || 'Term 1',
+      };
+
+      const { data, error } = await supabase
+        .from('school_settings')
+        .upsert(updateData, {
+          onConflict: 'school_id',
+        })
+        .select();
+
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
+
+      console.log('Save successful:', data);
 
       toast({
         title: "Profile Updated",
         description: "School profile has been saved successfully.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving profile:', error);
       toast({
         title: "Error",
-        description: "Failed to save school profile.",
+        description: error.message || "Failed to save school profile.",
         variant: "destructive",
       });
     }
@@ -597,6 +624,8 @@ export default function SettingsPage() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    console.log('Starting logo upload...', { fileName: file.name, fileSize: file.size, fileType: file.type });
 
     if (file.size > 5 * 1024 * 1024) {
       toast({
@@ -616,6 +645,7 @@ export default function SettingsPage() {
     }
 
     if (!profile?.school_id) {
+      console.error('No school_id found in profile');
       toast({
         title: "Error",
         description: "School information not found.",
@@ -623,6 +653,8 @@ export default function SettingsPage() {
       });
       return;
     }
+
+    console.log('School ID:', profile.school_id);
 
     try {
       // Show preview immediately
@@ -636,43 +668,53 @@ export default function SettingsPage() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${profile.school_id}/logo.${fileExt}`;
       
-      // Delete old logo if exists
-      await supabase.storage
-        .from('school-assets')
-        .remove([fileName]);
+      console.log('Uploading to storage:', fileName);
 
-      // Upload new logo
-      const { data, error } = await supabase.storage
+      // Upload new logo (upsert will replace if exists)
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('school-assets')
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true
         });
 
-      if (error) throw error;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful:', uploadData);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('school-assets')
         .getPublicUrl(fileName);
 
+      console.log('Public URL:', publicUrl);
       setLogoPreview(publicUrl);
 
       // Save URL to database
-      await supabase
+      const { error: dbError } = await supabase
         .from('school_settings')
         .update({ school_logo_url: publicUrl })
         .eq('school_id', profile.school_id);
+
+      if (dbError) {
+        console.error('Database update error:', dbError);
+        throw dbError;
+      }
+
+      console.log('Database updated successfully');
 
       toast({
         title: "Logo Uploaded",
         description: `${file.name} has been uploaded successfully.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading logo:', error);
       toast({
         title: "Upload Failed",
-        description: "Failed to upload logo. Please try again.",
+        description: error.message || "Failed to upload logo. Please try again.",
         variant: "destructive",
       });
     }
@@ -681,6 +723,8 @@ export default function SettingsPage() {
   const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    console.log('Starting signature upload...', { fileName: file.name, fileSize: file.size, fileType: file.type });
 
     if (file.size > 5 * 1024 * 1024) {
       toast({
@@ -700,6 +744,7 @@ export default function SettingsPage() {
     }
 
     if (!profile?.school_id) {
+      console.error('No school_id found in profile');
       toast({
         title: "Error",
         description: "School information not found.",
@@ -707,6 +752,8 @@ export default function SettingsPage() {
       });
       return;
     }
+
+    console.log('School ID:', profile.school_id);
 
     try {
       // Show preview immediately
@@ -720,43 +767,53 @@ export default function SettingsPage() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${profile.school_id}/signature.${fileExt}`;
       
-      // Delete old signature if exists
-      await supabase.storage
-        .from('school-assets')
-        .remove([fileName]);
+      console.log('Uploading to storage:', fileName);
 
-      // Upload new signature
-      const { data, error } = await supabase.storage
+      // Upload new signature (upsert will replace if exists)
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('school-assets')
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true
         });
 
-      if (error) throw error;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful:', uploadData);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('school-assets')
         .getPublicUrl(fileName);
 
+      console.log('Public URL:', publicUrl);
       setSignaturePreview(publicUrl);
 
       // Save URL to database
-      await supabase
+      const { error: dbError } = await supabase
         .from('school_settings')
         .update({ headmaster_signature_url: publicUrl })
         .eq('school_id', profile.school_id);
+
+      if (dbError) {
+        console.error('Database update error:', dbError);
+        throw dbError;
+      }
+
+      console.log('Database updated successfully');
 
       toast({
         title: "Signature Uploaded",
         description: `${file.name} has been uploaded successfully.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading signature:', error);
       toast({
         title: "Upload Failed",
-        description: "Failed to upload signature. Please try again.",
+        description: error.message || "Failed to upload signature. Please try again.",
         variant: "destructive",
       });
     }

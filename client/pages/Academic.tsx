@@ -30,6 +30,7 @@ interface SubjectScores {
 interface StudentReport {
   id: string;
   name: string;
+  studentNumber: string;
   subjects: {
     name: string;
     classScore: number;
@@ -77,8 +78,8 @@ export default function Academic() {
   const [isTeacher, setIsTeacher] = useState(false);
   const [schoolLogo, setSchoolLogo] = useState<string>("");
   const [headmasterSignature, setHeadmasterSignature] = useState<string>("");
+  const [schoolName, setSchoolName] = useState<string>("Your School");
 
-  const schoolName = localStorage.getItem("schoolName") || "Your School";
   const { academicYear: currentAcademicYear } = useAcademicYear();
 
   // Load user profile and grading scale
@@ -146,16 +147,25 @@ export default function Academic() {
             ]);
           }
 
-          // Load school settings (logo and signature)
-          const { data: settings } = await supabase
+          // Load school settings (logo, signature, and school name)
+          const { data: settings, error: settingsError } = await supabase
             .from('school_settings')
-            .select('school_logo_url, headmaster_signature_url')
+            .select('school_logo_url, headmaster_signature_url, school_name')
             .eq('school_id', profile.school_id)
             .single();
           
-          if (settings) {
-            setSchoolLogo(settings.school_logo_url || '');
-            setHeadmasterSignature(settings.headmaster_signature_url || '');
+          console.log('Loading school settings for school_id:', profile.school_id);
+          
+          if (settingsError) {
+            console.error('Error loading school settings:', settingsError);
+          } else {
+            console.log('School settings loaded:', settings);
+            setSchoolLogo(settings?.school_logo_url || '');
+            setHeadmasterSignature(settings?.headmaster_signature_url || '');
+            setSchoolName(settings?.school_name || 'Your School');
+            console.log('Logo URL:', settings?.school_logo_url);
+            console.log('Signature URL:', settings?.headmaster_signature_url);
+            console.log('School Name:', settings?.school_name);
           }
         }
       }
@@ -520,7 +530,7 @@ export default function Academic() {
   const handleScoreChange = (id: string, field: "classScore" | "examScore", value: number) => {
     setScores(
       scores.map((score) =>
-        score.id === id ? { ...score, [field]: Math.min(value, field === "classScore" ? 30 : 70) } : score
+        score.id === id ? { ...score, [field]: Math.min(value, 50) } : score
       )
     );
   };
@@ -580,6 +590,7 @@ export default function Academic() {
       // Group scores by student
       const studentScoresMap = new Map<string, {
         name: string;
+        studentNumber: string;
         subjects: Array<{
           name: string;
           classScore: number;
@@ -592,10 +603,12 @@ export default function Academic() {
       scoresData.forEach((score: any) => {
         const studentId = score.student_id;
         const studentName = score.students?.full_name || 'Unknown Student';
+        const studentNumber = score.students?.student_number || 'N/A';
         
         if (!studentScoresMap.has(studentId)) {
           studentScoresMap.set(studentId, {
             name: studentName,
+            studentNumber: studentNumber,
             subjects: [],
           });
         }
@@ -617,6 +630,7 @@ export default function Academic() {
         return {
           id: studentId,
           name: data.name,
+          studentNumber: data.studentNumber,
           subjects: data.subjects,
           totalScore,
           averageScore,
@@ -646,10 +660,46 @@ export default function Academic() {
     }
   };
 
-  const handleDownloadReport = (report: StudentReport) => {
+  const handleDownloadReport = async (report: StudentReport) => {
+    console.log('=== DOWNLOAD REPORT DEBUG ===');
+    
+    // CRITICAL: Reload school settings to get latest logo/signature/name URLs
+    let currentLogoUrl = schoolLogo;
+    let currentSignatureUrl = headmasterSignature;
+    let currentSchoolName = schoolName;
+    
+    if (profileSchoolId) {
+      console.log('Reloading school settings before PDF generation...');
+      const { data: settings, error } = await supabase
+        .from('school_settings')
+        .select('school_logo_url, headmaster_signature_url, school_name')
+        .eq('school_id', profileSchoolId)
+        .single();
+      
+      if (error) {
+        console.error('Error reloading school settings:', error);
+      } else if (settings) {
+        currentLogoUrl = settings.school_logo_url || '';
+        currentSignatureUrl = settings.headmaster_signature_url || '';
+        currentSchoolName = settings.school_name || 'Your School';
+        console.log('Reloaded Logo URL:', currentLogoUrl);
+        console.log('Reloaded Signature URL:', currentSignatureUrl);
+        console.log('Reloaded School Name:', currentSchoolName);
+        
+        // Update state for future downloads
+        setSchoolLogo(currentLogoUrl);
+        setHeadmasterSignature(currentSignatureUrl);
+        setSchoolName(currentSchoolName);
+      }
+    }
+    
+    console.log('Final Logo URL for PDF:', currentLogoUrl);
+    console.log('Final Signature URL for PDF:', currentSignatureUrl);
+    console.log('Final School Name for PDF:', currentSchoolName);
+    
     const studentData = {
       name: report.name,
-      id: report.id,
+      id: report.studentNumber,
       class: selectedClass,
       term: gradingPeriod === "mid-term" ? "Mid-Term" : "End of Term",
       totalScore: report.totalScore,
@@ -660,19 +710,30 @@ export default function Academic() {
       attendance: "95", // Mock data
     };
 
-    generateStudentReportCard(studentData, schoolName, schoolLogo, headmasterSignature);
-    toast({
-      title: "Download Started",
-      description: `Report card for ${report.name} is being downloaded.`,
-    });
+    try {
+      await generateStudentReportCard(studentData, currentSchoolName, currentLogoUrl, currentSignatureUrl);
+      toast({
+        title: "Download Started",
+        description: `Report card for ${report.name} is being downloaded.`,
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Download Failed",
+        description: "Failed to generate report card. Check console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDownloadAllReports = () => {
-    reports.forEach((report, index) => {
-      setTimeout(() => {
-        handleDownloadReport(report);
-      }, index * 500); // Stagger downloads
-    });
+  const handleDownloadAllReports = async () => {
+    for (let i = 0; i < reports.length; i++) {
+      await handleDownloadReport(reports[i]);
+      // Small delay between downloads
+      if (i < reports.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
     
     toast({
       title: "Batch Download Started",
@@ -810,8 +871,8 @@ export default function Academic() {
                   <thead className="bg-muted border-b border-border">
                     <tr>
                       <th className="px-2 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold">Student</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold">Class (30)</th>
-                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold">Exam (70)</th>
+                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold">Class (50)</th>
+                      <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold">Exam (50)</th>
                       <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold">Total</th>
                       <th className="px-2 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold">Grade</th>
                     </tr>
@@ -829,7 +890,7 @@ export default function Academic() {
                             <Input
                               type="number"
                               min="0"
-                              max="30"
+                              max="50"
                               value={score.classScore === 0 ? "" : score.classScore}
                               onChange={(e) =>
                                 handleScoreChange(score.id, "classScore", parseInt(e.target.value) || 0)
@@ -842,7 +903,7 @@ export default function Academic() {
                             <Input
                               type="number"
                               min="0"
-                              max="70"
+                              max="50"
                               value={score.examScore === 0 ? "" : score.examScore}
                               onChange={(e) =>
                                 handleScoreChange(score.id, "examScore", parseInt(e.target.value) || 0)

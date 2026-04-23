@@ -33,22 +33,37 @@ export function generateCSV(data: any[], filename: string) {
 }
 
 // Generate academic report PDF
-export function generateAcademicReportPDF(data: any[], schoolName: string) {
+export async function generateAcademicReportPDF(data: any[], schoolName: string, schoolLogo?: string, headmasterSignature?: string) {
   const doc = new jsPDF();
+  
+  let currentY = 20;
+
+  // Add school logo if available
+  if (schoolLogo) {
+    try {
+      console.log('Loading logo for academic report:', schoolLogo);
+      const logoBase64 = await urlToBase64(schoolLogo);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      currentY = 45;
+    } catch (error) {
+      console.error('Error adding logo to academic report:', error);
+      currentY = 20;
+    }
+  }
   
   // Add header
   doc.setFontSize(20);
-  doc.text(schoolName, 105, 20, { align: 'center' });
+  doc.text(schoolName, 105, currentY, { align: 'center' });
   doc.setFontSize(16);
-  doc.text('Academic Performance Report', 105, 30, { align: 'center' });
+  doc.text('Academic Performance Report', 105, currentY + 10, { align: 'center' });
   
   // Add date
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 40, { align: 'center' });
+  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, currentY + 20, { align: 'center' });
   
   // Add table
   autoTable(doc, {
-    startY: 50,
+    startY: currentY + 30,
     head: [['Class', 'Average Score', 'Top Student', 'Top Score']],
     body: data.map(item => [
       item.class,
@@ -68,6 +83,19 @@ export function generateAcademicReportPDF(data: any[], schoolName: string) {
   doc.text(`Total Classes: ${data.length}`, 14, finalY + 25);
   doc.text(`School Average: ${(data.reduce((sum, item) => sum + item.avgScore, 0) / data.length).toFixed(1)}%`, 14, finalY + 32);
   
+  // Add signature if available
+  if (headmasterSignature) {
+    try {
+      console.log('Loading signature for academic report:', headmasterSignature);
+      const signatureBase64 = await urlToBase64(headmasterSignature);
+      doc.setFontSize(10);
+      doc.text("Headmaster's Signature:", 14, finalY + 50);
+      doc.addImage(signatureBase64, 'PNG', 14, finalY + 52, 40, 15);
+    } catch (error) {
+      console.error('Error adding signature to academic report:', error);
+    }
+  }
+  
   // Add footer
   const pageCount = doc.getNumberOfPages();
   doc.setFontSize(8);
@@ -81,22 +109,37 @@ export function generateAcademicReportPDF(data: any[], schoolName: string) {
 }
 
 // Generate attendance report PDF
-export function generateAttendanceReportPDF(data: any[], schoolName: string) {
+export async function generateAttendanceReportPDF(data: any[], schoolName: string, schoolLogo?: string, headmasterSignature?: string) {
   const doc = new jsPDF();
+  
+  let currentY = 20;
+
+  // Add school logo if available
+  if (schoolLogo) {
+    try {
+      console.log('Loading logo for attendance report:', schoolLogo);
+      const logoBase64 = await urlToBase64(schoolLogo);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      currentY = 45;
+    } catch (error) {
+      console.error('Error adding logo to attendance report:', error);
+      currentY = 20;
+    }
+  }
   
   // Add header
   doc.setFontSize(20);
-  doc.text(schoolName, 105, 20, { align: 'center' });
+  doc.text(schoolName, 105, currentY, { align: 'center' });
   doc.setFontSize(16);
-  doc.text('Attendance Report', 105, 30, { align: 'center' });
+  doc.text('Attendance Report', 105, currentY + 10, { align: 'center' });
   
   // Add date
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 40, { align: 'center' });
+  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, currentY + 20, { align: 'center' });
   
   // Add table
   autoTable(doc, {
-    startY: 50,
+    startY: currentY + 30,
     head: [['Class', 'Attendance Rate', 'Total Students', 'Absences']],
     body: data.map(item => [
       item.class,
@@ -116,6 +159,19 @@ export function generateAttendanceReportPDF(data: any[], schoolName: string) {
   doc.text(`School Average Attendance: ${(data.reduce((sum, item) => sum + item.rate, 0) / data.length).toFixed(1)}%`, 14, finalY + 25);
   doc.text(`Total Absences: ${data.reduce((sum, item) => sum + item.absent, 0)}`, 14, finalY + 32);
   
+  // Add signature if available
+  if (headmasterSignature) {
+    try {
+      console.log('Loading signature for attendance report:', headmasterSignature);
+      const signatureBase64 = await urlToBase64(headmasterSignature);
+      doc.setFontSize(10);
+      doc.text("Headmaster's Signature:", 14, finalY + 50);
+      doc.addImage(signatureBase64, 'PNG', 14, finalY + 52, 40, 15);
+    } catch (error) {
+      console.error('Error adding signature to attendance report:', error);
+    }
+  }
+  
   // Add footer
   const pageCount = doc.getNumberOfPages();
   doc.setFontSize(8);
@@ -129,28 +185,43 @@ export function generateAttendanceReportPDF(data: any[], schoolName: string) {
 }
 
 // Generate enrollment report PDF
-export function generateEnrollmentReportPDF(data: any[], schoolName: string) {
+export async function generateEnrollmentReportPDF(data: any[], schoolName: string, schoolLogo?: string, headmasterSignature?: string) {
   const doc = new jsPDF();
   
   const totalEnrollment = data.reduce((sum, item) => sum + item.total, 0);
   const totalBoys = data.reduce((sum, item) => sum + item.boys, 0);
   const totalGirls = data.reduce((sum, item) => sum + item.girls, 0);
   
+  let currentY = 20;
+
+  // Add school logo if available
+  if (schoolLogo) {
+    try {
+      console.log('Loading logo for enrollment report:', schoolLogo);
+      const logoBase64 = await urlToBase64(schoolLogo);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      currentY = 45;
+    } catch (error) {
+      console.error('Error adding logo to enrollment report:', error);
+      currentY = 20;
+    }
+  }
+  
   // Add header
   doc.setFontSize(20);
-  doc.text(schoolName, 105, 20, { align: 'center' });
+  doc.text(schoolName, 105, currentY, { align: 'center' });
   doc.setFontSize(16);
-  doc.text('Enrollment Report', 105, 30, { align: 'center' });
+  doc.text('Enrollment Report', 105, currentY + 10, { align: 'center' });
   
   // Add date
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 40, { align: 'center' });
+  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, currentY + 20, { align: 'center' });
   
   // Add overview
   doc.setFontSize(12);
-  doc.text('Overview', 14, 55);
+  doc.text('Overview', 14, currentY + 35);
   autoTable(doc, {
-    startY: 60,
+    startY: currentY + 40,
     head: [['Metric', 'Value']],
     body: [
       ['Total Enrollment', totalEnrollment.toString()],
@@ -179,6 +250,20 @@ export function generateEnrollmentReportPDF(data: any[], schoolName: string) {
     headStyles: { fillColor: [66, 66, 66] },
   });
   
+  // Add signature if available
+  const finalY2 = (doc as any).lastAutoTable.finalY || 60;
+  if (headmasterSignature) {
+    try {
+      console.log('Loading signature for enrollment report:', headmasterSignature);
+      const signatureBase64 = await urlToBase64(headmasterSignature);
+      doc.setFontSize(10);
+      doc.text("Headmaster's Signature:", 14, finalY2 + 15);
+      doc.addImage(signatureBase64, 'PNG', 14, finalY2 + 17, 40, 15);
+    } catch (error) {
+      console.error('Error adding signature to enrollment report:', error);
+    }
+  }
+  
   // Add footer
   const pageCount = doc.getNumberOfPages();
   doc.setFontSize(8);
@@ -191,8 +276,25 @@ export function generateEnrollmentReportPDF(data: any[], schoolName: string) {
   doc.save(`Enrollment_Report_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
+// Helper function to convert image URL to base64
+async function urlToBase64(url: string): Promise<string> {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    throw error;
+  }
+}
+
 // Generate student report card
-export function generateStudentReportCard(student: any, schoolName: string, schoolLogo?: string, headmasterSignature?: string) {
+export async function generateStudentReportCard(student: any, schoolName: string, schoolLogo?: string, headmasterSignature?: string) {
   const doc = new jsPDF();
   
   let currentY = 20;
@@ -200,8 +302,11 @@ export function generateStudentReportCard(student: any, schoolName: string, scho
   // Add school logo if available
   if (schoolLogo) {
     try {
-      doc.addImage(schoolLogo, 'PNG', 14, 10, 30, 30);
+      console.log('Loading logo from URL:', schoolLogo);
+      const logoBase64 = await urlToBase64(schoolLogo);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
       currentY = 45;
+      console.log('Logo added successfully');
     } catch (error) {
       console.error('Error adding logo to PDF:', error);
       currentY = 20;
@@ -222,7 +327,7 @@ export function generateStudentReportCard(student: any, schoolName: string, scho
     head: [['Field', 'Value']],
     body: [
       ['Name', student.name],
-      ['Student ID', student.id],
+      ['Student Number', student.id],
       ['Class', student.class],
       ['Term', student.term || 'Current Term'],
     ],
@@ -237,7 +342,7 @@ export function generateStudentReportCard(student: any, schoolName: string, scho
   
   autoTable(doc, {
     startY: finalY1 + 20,
-    head: [['Subject', 'Class Score (30%)', 'Exam Score (70%)', 'Total (100%)', 'Grade']],
+    head: [['Subject', 'Class Score (50%)', 'Exam Score (50%)', 'Total (100%)', 'Grade']],
     body: student.subjects?.map((subject: any) => [
       subject.name,
       subject.classScore,
@@ -285,7 +390,10 @@ export function generateStudentReportCard(student: any, schoolName: string, scho
   // Add signature image if available
   if (headmasterSignature) {
     try {
-      doc.addImage(headmasterSignature, 'PNG', 14, signatureY + 2, 40, 15);
+      console.log('Loading signature from URL:', headmasterSignature);
+      const signatureBase64 = await urlToBase64(headmasterSignature);
+      doc.addImage(signatureBase64, 'PNG', 14, signatureY + 2, 40, 15);
+      console.log('Signature added successfully');
     } catch (error) {
       console.error('Error adding signature to PDF:', error);
       doc.text("_______________________", 14, signatureY + 5);
