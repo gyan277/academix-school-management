@@ -26,6 +26,7 @@ import { DollarSign, TrendingUp, CreditCard, Wallet, Plus, Search } from "lucide
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useAcademicYear } from "@/hooks/use-academic-year";
 
 interface ClassFee {
   id: string;

@@ -192,20 +192,33 @@ export function generateEnrollmentReportPDF(data: any[], schoolName: string) {
 }
 
 // Generate student report card
-export function generateStudentReportCard(student: any, schoolName: string, schoolLogo?: string) {
+export function generateStudentReportCard(student: any, schoolName: string, schoolLogo?: string, headmasterSignature?: string) {
   const doc = new jsPDF();
+  
+  let currentY = 20;
+
+  // Add school logo if available
+  if (schoolLogo) {
+    try {
+      doc.addImage(schoolLogo, 'PNG', 14, 10, 30, 30);
+      currentY = 45;
+    } catch (error) {
+      console.error('Error adding logo to PDF:', error);
+      currentY = 20;
+    }
+  }
   
   // Add header
   doc.setFontSize(20);
-  doc.text(schoolName, 105, 20, { align: 'center' });
+  doc.text(schoolName, 105, currentY, { align: 'center' });
   doc.setFontSize(16);
-  doc.text('Student Report Card', 105, 30, { align: 'center' });
+  doc.text('Student Report Card', 105, currentY + 10, { align: 'center' });
   
   // Add student information
   doc.setFontSize(12);
-  doc.text('Student Information', 14, 45);
+  doc.text('Student Information', 14, currentY + 25);
   autoTable(doc, {
-    startY: 50,
+    startY: currentY + 30,
     head: [['Field', 'Value']],
     body: [
       ['Name', student.name],
@@ -264,9 +277,24 @@ export function generateStudentReportCard(student: any, schoolName: string, scho
   
   // Add signature section
   const remarksHeight = splitRemarks.length * 5;
+  const signatureY = finalY3 + 30 + remarksHeight;
+  
   doc.setFontSize(10);
-  doc.text("Headmaster's Signature: _______________________", 14, finalY3 + 30 + remarksHeight);
-  doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, finalY3 + 40 + remarksHeight);
+  doc.text("Headmaster's Signature:", 14, signatureY);
+  
+  // Add signature image if available
+  if (headmasterSignature) {
+    try {
+      doc.addImage(headmasterSignature, 'PNG', 14, signatureY + 2, 40, 15);
+    } catch (error) {
+      console.error('Error adding signature to PDF:', error);
+      doc.text("_______________________", 14, signatureY + 5);
+    }
+  } else {
+    doc.text("_______________________", 14, signatureY + 5);
+  }
+  
+  doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, signatureY + 20);
   
   // Add footer
   const pageCount = doc.getNumberOfPages();
@@ -274,7 +302,7 @@ export function generateStudentReportCard(student: any, schoolName: string, scho
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
-    doc.text(`© ${new Date().getFullYear()} School Management System`, 105, 290, { align: 'center' });
+    doc.text(`© ${new Date().getFullYear()} ${schoolName}`, 105, 290, { align: 'center' });
   }
   
   doc.save(`Report_Card_${student.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);

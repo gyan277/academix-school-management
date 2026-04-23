@@ -159,35 +159,96 @@ export default function Reports() {
 
   const loadAcademicData = async () => {
     try {
-      const { data: scores, error } = await supabase
-        .from("exam_scores")
+      console.log("Loading academic data for school:", schoolId);
+
+      // Get current academic year from school settings
+      const { data: settings } = await supabase
+        .from("school_settings")
+        .select("current_academic_year, current_term")
+        .eq("school_id", schoolId)
+        .single();
+
+      const academicYear = settings?.current_academic_year || "2024/2025";
+      const term = settings?.current_term || "Term 1";
+
+      console.log("Using academic year:", academicYear, "term:", term);
+
+      // Build query - start with base filters
+      let query = supabase
+        .from("academic_scores")
         .select(`
-          score,
+          total_score,
           student_id,
-          students!inner(class, full_name, school_id)
+          class,
+          students!inner(full_name, school_id)
         `)
-        .eq("students.school_id", schoolId);
+        .eq("school_id", schoolId)
+        .eq("academic_year", academicYear);
 
-      if (error) throw error;
+      // Only filter by term if it's set (not null)
+      if (term && term !== "NULL") {
+        query = query.eq("term", term);
+      }
 
-      // Group by class and calculate averages
+      const { data: scores, error } = await query;
+
+      if (error) {
+        console.error("Error fetching academic scores:", error);
+        throw error;
+      }
+
+      console.log("Fetched academic scores:", scores?.length || 0, "records");
+
+      if (!scores || scores.length === 0) {
+        console.log("No academic scores found");
+        setAcademicData([]);
+        return;
+      }
+
+      // Calculate average score per student (average of all their subjects)
+      const studentAverages = new Map<string, { studentId: string; fullName: string; class: string; avgScore: number }>();
+      
+      scores.forEach((score: any) => {
+        const key = score.student_id;
+        if (!studentAverages.has(key)) {
+          studentAverages.set(key, {
+            studentId: score.student_id,
+            fullName: score.students.full_name,
+            class: score.class,
+            avgScore: 0,
+          });
+        }
+      });
+
+      // Calculate average for each student
+      studentAverages.forEach((student, studentId) => {
+        const studentScores = scores.filter((s: any) => s.student_id === studentId);
+        const totalScore = studentScores.reduce((sum: number, s: any) => sum + s.total_score, 0);
+        student.avgScore = totalScore / studentScores.length;
+      });
+
+      console.log("Calculated averages for", studentAverages.size, "students");
+
+      // Group by class and calculate class averages
       const grouped = classes.map(className => {
-        const classScores = scores?.filter((s: any) => s.students.class === className) || [];
+        const classStudents = Array.from(studentAverages.values()).filter(s => s.class === className);
         
-        if (classScores.length === 0) return null;
+        if (classStudents.length === 0) return null;
 
-        const avgScore = classScores.reduce((sum: number, s: any) => sum + s.score, 0) / classScores.length;
-        const topScore = Math.max(...classScores.map((s: any) => s.score));
-        const topStudent = classScores.find((s: any) => s.score === topScore);
+        const classAvg = classStudents.reduce((sum, s) => sum + s.avgScore, 0) / classStudents.length;
+        const topStudent = classStudents.reduce((prev, current) => 
+          (current.avgScore > prev.avgScore) ? current : prev
+        );
 
         return {
           class: className,
-          avgScore: parseFloat(avgScore.toFixed(1)),
-          topStudent: topStudent?.students?.full_name || "N/A",
-          topScore,
+          avgScore: parseFloat(classAvg.toFixed(1)),
+          topStudent: topStudent.fullName,
+          topScore: parseFloat(topStudent.avgScore.toFixed(1)),
         };
       }).filter(item => item !== null) as AcademicData[];
 
+      console.log("Grouped data by class:", grouped);
       setAcademicData(grouped);
     } catch (error) {
       console.error("Error loading academic data:", error);

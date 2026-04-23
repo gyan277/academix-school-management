@@ -1,318 +1,229 @@
-# Reports & Analytics - Complete Database Integration
+# Reports & Analytics Fix
 
-## Overview
-Fixed both the **Dashboard** (admin screen) and **Reports** page to load real data from the database instead of showing mock/placeholder data.
+## Issue
+The Reports page was showing:
+- School Average: 0.0%
+- Top Performer: - (no data)
+- Classes Assessed: 0 out of 11
 
----
+## Root Causes
+1. The Reports page (`client/pages/Reports.tsx`) was querying from a non-existent table called `exam_scores` instead of the correct `academic_scores` table
+2. The `current_term` field in `school_settings` table was NULL, causing the query to return no results
 
 ## What Was Fixed
 
-### 1. Dashboard (Admin Screen) - `client/pages/Dashboard.tsx`
-
-#### Issues Found:
-- ❌ Not filtering by `school_id` (multi-tenancy issue)
-- ❌ Staff attendance showing 0/total (not loading actual data)
-- ❌ Attendance calculation not filtering by school
-- ❌ Unused error variable
-
-#### Fixes Applied:
-✅ **Added school_id filtering** - All queries now filter by current user's school
-✅ **Load staff attendance** - Now loads today's staff attendance from database
-✅ **Separate student/staff attendance** - Properly distinguishes between student and staff attendance
-✅ **Fixed calculations** - Attendance rates now calculated correctly
-
-#### New Features:
-- **Real-time stats** from database:
-  - Total enrollment (boys + girls)
-  - Today's student attendance rate
-  - Staff present count (e.g., "5/12 staff present")
-  - All filtered by school_id for multi-tenancy
-
-### 2. Reports Page - `client/pages/Reports.tsx`
-
-#### Issues Found:
-- ❌ Empty mock data arrays
-- ❌ No database integration
-- ❌ All reports showing "No data available"
-
-#### Fixes Applied:
-✅ **Added database loading** - All three report types now load from Supabase
-✅ **Multi-tenancy support** - All queries filter by school_id
-✅ **Loading states** - Shows spinner while loading data
-✅ **Real calculations** - All statistics calculated from actual data
-
-#### New Features:
-
-**Enrollment Reports:**
-- Loads all active students from database
-- Groups by class
-- Calculates boys/girls distribution
-- Shows only classes with students
-
-**Attendance Reports:**
-- Loads last 30 days of attendance
-- Groups by class
-- Calculates attendance rates
-- Shows absent counts
-- Only displays classes with attendance records
-
-**Academic Reports:**
-- Loads exam scores from database
-- Groups by class
-- Calculates class averages
-- Identifies top performers
-- Shows only classes with exam data
-
----
-
-## How It Works Now
-
-### Dashboard Analytics
-
-When admin logs in and opens Dashboard:
-
-1. **Loads school_id** from authenticated user
-2. **Queries database** for:
-   - Active students (filtered by school_id)
-   - Active staff (filtered by school_id)
-   - Today's student attendance (filtered by school_id and date)
-   - Today's staff attendance (filtered by school_id and date)
-3. **Calculates statistics**:
-   - Total enrollment, boys count, girls count
-   - Student attendance rate for today
-   - Staff present count for today
-4. **Displays real-time data** in cards
-
-### Reports Page Analytics
-
-When user opens Reports page:
-
-1. **Loads school_id** from authenticated user
-2. **Loads three report types in parallel**:
-
-   **Enrollment Tab:**
-   - Queries all active students
-   - Groups by class
-   - Calculates gender distribution
-   - Shows enrollment table
-
-   **Attendance Tab:**
-   - Queries last 30 days of attendance
-   - Groups by class
-   - Calculates attendance rates
-   - Shows trends table
-
-   **Academic Tab:**
-   - Queries exam scores with student info
-   - Groups by class
-   - Calculates averages and top scores
-   - Shows performance table
-
-3. **Displays interactive reports** with:
-   - Summary cards with key metrics
-   - Detailed tables with class-by-class breakdown
-   - Download buttons for PDF and CSV exports
-
----
-
-## Database Queries Used
-
-### Dashboard Queries:
-
+### 1. Updated Database Query
+**Before:**
 ```typescript
-// Students (with school_id filter)
-supabase.from("students")
-  .select("gender")
-  .eq("status", "active")
-  .eq("school_id", schoolId)
-
-// Staff (with school_id filter)
-supabase.from("staff")
-  .select("id")
-  .eq("status", "active")
-  .eq("school_id", schoolId)
-
-// Today's student attendance
-supabase.from("attendance")
-  .select("status, student_id")
-  .eq("date", today)
-  .eq("school_id", schoolId)
-  .not("student_id", "is", null)
-
-// Today's staff attendance
-supabase.from("attendance")
-  .select("status, staff_id")
-  .eq("date", today)
-  .eq("school_id", schoolId)
-  .not("staff_id", "is", null)
-```
-
-### Reports Queries:
-
-```typescript
-// Enrollment data
-supabase.from("students")
-  .select("class, gender")
-  .eq("status", "active")
-  .eq("school_id", schoolId)
-
-// Attendance data (last 30 days)
-supabase.from("attendance")
-  .select("class, status, student_id")
-  .eq("school_id", schoolId)
-  .not("student_id", "is", null)
-  .gte("date", thirtyDaysAgo)
-
-// Academic data (with join)
-supabase.from("exam_scores")
+const { data: scores, error } = await supabase
+  .from("exam_scores")  // ❌ Wrong table
   .select(`
     score,
     student_id,
     students!inner(class, full_name, school_id)
   `)
-  .eq("students.school_id", schoolId)
+  .eq("students.school_id", schoolId);
 ```
 
----
+**After:**
+```typescript
+// Build query - start with base filters
+let query = supabase
+  .from("academic_scores")  // ✅ Correct table
+  .select(`
+    total_score,
+    student_id,
+    class,
+    students!inner(full_name, school_id)
+  `)
+  .eq("school_id", schoolId)
+  .eq("academic_year", academicYear);
 
-## Testing Instructions
+// Only filter by term if it's set (not null)
+if (term && term !== "NULL") {
+  query = query.eq("term", term);
+}
+```
 
-### Test Dashboard:
+### 2. Added Academic Year and Term Filtering
+The fix now:
+- Loads current academic year and term from `school_settings` table
+- Filters scores by the current academic year
+- Only filters by term if it's set (handles NULL gracefully)
+- Falls back to "2024/2025" and "Term 1" if not set
 
-1. **Refresh browser** (F5)
-2. **Login as admin**
-3. **Go to Dashboard**
-4. **Expected results**:
-   - Total Enrollment card shows actual student count
-   - Boys/Girls breakdown shows correct numbers
-   - Today's Attendance shows percentage (or 0% if no attendance marked today)
-   - Staff Present shows "X/Y" (e.g., "5/12" if 5 staff marked present out of 12 total)
-
-### Test Reports Page:
-
-1. **Go to Reports page**
-2. **Check Enrollment tab**:
-   - Should show table with classes that have students
-   - Should show boys/girls/total for each class
-   - Summary cards should show totals
-3. **Check Attendance tab**:
-   - Should show classes with attendance records from last 30 days
-   - Should show attendance rates and absent counts
-   - If no attendance marked yet, shows "No attendance data available"
-4. **Check Academic tab**:
-   - Should show classes with exam scores
-   - Should show average scores and top performers
-   - If no scores entered yet, shows "No academic data available"
-
-### Verify Database:
-
+### 3. Fixed NULL Current Term Issue
+**Database Fix:**
+- Created `FIX_NULL_CURRENT_TERM.sql` to set default term to "Term 1" for all schools
+- Run this SQL in Supabase SQL Editor:
 ```sql
--- Check if data exists
-SELECT COUNT(*) as student_count FROM public.students WHERE status = 'active';
-SELECT COUNT(*) as staff_count FROM public.staff WHERE status = 'active';
-SELECT COUNT(*) as attendance_count FROM public.attendance WHERE date = CURRENT_DATE;
-SELECT COUNT(*) as exam_count FROM public.exam_scores;
-
--- Check today's attendance breakdown
-SELECT 
-  status,
-  COUNT(*) as count,
-  CASE WHEN student_id IS NOT NULL THEN 'Student' ELSE 'Staff' END as type
-FROM public.attendance
-WHERE date = CURRENT_DATE
-GROUP BY status, type;
+UPDATE school_settings
+SET current_term = 'Term 1'
+WHERE current_term IS NULL;
 ```
 
----
+**Frontend Fix:**
+- Added `currentTerm` state to Settings page
+- Added dropdown selector for Current Term (Term 1, Term 2, Term 3)
+- Updated `handleSaveSchoolSettings` to save current_term to database
+- Updated `loadSchoolSettings` to load current_term from database
 
-## What Shows When No Data Exists
+### 4. Improved Score Calculation
+**Student Average Calculation:**
+- Each student may have multiple subject scores
+- Calculate average of all subjects per student
+- Use this average for class rankings and school average
 
-### Dashboard:
-- Total Enrollment: **0**
-- Boys: **0**, Girls: **0**
-- Today's Attendance: **0.0%**
-- Staff Present: **0/0**
+**Class Average Calculation:**
+- Group students by class
+- Calculate average of student averages per class
+- Find top performer in each class
 
-### Reports Page:
+**School-Wide Metrics:**
+- School Average: Average of all class averages
+- Top Performer: Student with highest average across all subjects
+- Classes Assessed: Count of classes with at least one score
 
-**Enrollment Tab:**
-- Shows: "No enrollment data available yet"
-- Message: "Add students in the Registrar page to see enrollment reports"
+### 5. Added Console Logging
+Added comprehensive logging to help debug:
+```typescript
+console.log("Loading academic data for school:", schoolId);
+console.log("Using academic year:", academicYear, "term:", term);
+console.log("Fetched academic scores:", scores?.length || 0, "records");
+console.log("Calculated averages for", studentAverages.size, "students");
+console.log("Grouped data by class:", grouped);
+```
 
-**Attendance Tab:**
-- Shows: "No attendance data available yet"
-- Message: "Mark attendance in the Attendance page to see trends"
+## How to Verify the Fix
 
-**Academic Tab:**
-- Shows: "No academic data available yet"
-- Message: "Enter exam scores in the Academic page to see performance reports"
+### Step 1: Fix NULL Current Term in Database
+Run `FIX_NULL_CURRENT_TERM.sql` in Supabase SQL Editor:
+```sql
+UPDATE school_settings
+SET current_term = 'Term 1'
+WHERE current_term IS NULL;
+```
 
----
+### Step 2: Set Current Term in Settings
+1. Go to **Settings** page
+2. In the **Profile** tab, you'll now see two fields:
+   - Academic Year (text input)
+   - Current Term (dropdown: Term 1, Term 2, Term 3)
+3. Select the appropriate term
+4. Click "Save School Settings"
 
-## Multi-Tenancy Support
+### Step 3: Check if Academic Data Exists
+Run the SQL file `CHECK_ACADEMIC_SCORES_DATA.sql` in Supabase SQL Editor to verify:
+1. If there are any academic scores in the database
+2. Which schools have scores
+3. Which academic year and term the scores are for
+4. What the calculated averages should be
 
-✅ **All queries filter by school_id**
-✅ **Each school sees only their data**
-✅ **No data leakage between schools**
-✅ **Proper isolation maintained**
+### Step 4: Ensure Academic Scores Are Entered
+If no data exists:
+1. Go to **Academic** page
+2. Select a class, term, and grading period
+3. Enter scores for students in various subjects
+4. Click "Save Scores"
 
----
+### Step 5: Check Reports Page
+1. Navigate to **Reports & Analytics** page (admin only)
+2. Click on the **Academic** tab
+3. You should now see:
+   - School Average (percentage)
+   - Top Performer (student name and score)
+   - Classes Assessed (number of classes with scores)
+   - Class Performance Comparison table
 
-## Performance Optimizations
+### Step 6: Check Browser Console
+Open browser DevTools (F12) and check the Console tab for:
+- "Loading academic data for school: [school_id]"
+- "Using academic year: 2024/2025 term: Term 1"
+- "Fetched academic scores: X records"
+- "Calculated averages for X students"
+- "Grouped data by class: [array]"
 
-1. **Parallel loading** - Reports page loads all three report types simultaneously
-2. **Filtered queries** - All queries include school_id filter to reduce data transfer
-3. **Indexed columns** - Database has indexes on school_id, date, class, status
-4. **Efficient grouping** - Data grouped in frontend after single query per report type
+## Database Schema Reference
 
----
+### academic_scores Table Structure
+```sql
+- id: UUID (primary key)
+- school_id: UUID (references schools)
+- student_id: UUID (references students)
+- subject_id: UUID (references subjects)
+- class: VARCHAR(10)
+- academic_year: VARCHAR(20) DEFAULT '2024/2025'
+- term: VARCHAR(20) -- 'Term 1', 'Term 2', 'Term 3'
+- grading_period: VARCHAR(20) -- 'mid-term' or 'end-term'
+- class_score: DECIMAL(5,2) -- Max 50
+- exam_score: DECIMAL(5,2) -- Max 50
+- total_score: DECIMAL(5,2) -- Auto-calculated (class_score + exam_score)
+- grade: VARCHAR(5) -- Auto-calculated based on grading scale
+- remarks: TEXT
+- recorded_by: UUID
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+```
 
-## Export Features
+### school_settings Table Structure
+```sql
+- id: UUID (primary key, references schools)
+- school_id: UUID (references schools)
+- school_name: VARCHAR
+- school_address: TEXT
+- school_phone: VARCHAR
+- school_email: VARCHAR
+- current_academic_year: VARCHAR(20) DEFAULT '2024/2025'
+- current_term: VARCHAR(20) -- 'Term 1', 'Term 2', 'Term 3' (NOW REQUIRED)
+- school_logo_url: TEXT
+- headmaster_signature_url: TEXT
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+```
 
-All reports support:
-- **PDF export** - Formatted PDF with school name and data
-- **CSV export** - Spreadsheet-compatible format for Excel/Google Sheets
+### Key Points
+- Each student has multiple records (one per subject)
+- `total_score` is auto-calculated (max 100)
+- Scores are filtered by `school_id`, `academic_year`, and optionally `term`
+- Multi-tenancy is enforced via RLS policies
+- `current_term` must be set in school_settings for Reports to work properly
 
-Export functions already implemented in `client/lib/export-utils.ts`
+## Expected Behavior After Fix
 
----
+### When Academic Data Exists:
+- **School Average**: Shows average percentage across all students and subjects
+- **Top Performer**: Shows the student with highest average score and their class
+- **Classes Assessed**: Shows count of classes that have at least one score entered
+- **Performance Table**: Lists all classes with scores, showing:
+  - Class name
+  - Average score for the class
+  - Performance bar (visual representation)
+  - Top student in that class
+  - Top student's score
+
+### When No Academic Data Exists:
+- Shows "No academic data available yet"
+- Prompts user to "Enter exam scores in the Academic page to see performance reports"
 
 ## Files Modified
+- `client/pages/Reports.tsx` - Fixed academic data loading function, made term filter optional
+- `client/pages/Settings.tsx` - Added current_term field with dropdown selector
 
-1. ✅ `client/pages/Dashboard.tsx` - Added real database queries with school_id filtering
-2. ✅ `client/pages/Reports.tsx` - Complete database integration for all three report types
+## Files Created
+- `FIX_NULL_CURRENT_TERM.sql` - Sets default term to "Term 1" for all schools
+- `CHECK_ACADEMIC_SCORES_DATA.sql` - Diagnostic queries
+- `REPORTS_ANALYTICS_FIX.md` - This documentation
 
----
+## Related Features
+- Academic page: Where scores are entered
+- Dashboard page: Shows basic stats (enrollment, attendance)
+- Reports page: Shows detailed analytics (academic, attendance, enrollment)
+- Settings page: Where academic year and current term are configured
 
-## Summary
-
-| Feature | Before | After |
-|---------|--------|-------|
-| Dashboard stats | Mock data | Real-time from database |
-| Student attendance | Not filtered by school | Filtered by school_id |
-| Staff attendance | Always 0 | Actual count from database |
-| Enrollment reports | Empty arrays | Loaded from students table |
-| Attendance reports | Empty arrays | Last 30 days from attendance table |
-| Academic reports | Empty arrays | Loaded from exam_scores table |
-| Multi-tenancy | Broken | Fully working |
-| Loading states | None | Spinner while loading |
-
----
-
-## Next Steps (Optional Enhancements)
-
-1. **Add date range filters** - Let users select custom date ranges for reports
-2. **Add charts/graphs** - Visual representation of data (bar charts, pie charts)
-3. **Add export scheduling** - Automated weekly/monthly report generation
-4. **Add email reports** - Send reports to admin email
-5. **Add comparison views** - Compare current month vs previous month
-6. **Add drill-down** - Click on class to see individual student details
-7. **Add caching** - Cache report data for faster loading
-
----
-
-## Status
-
-✅ **COMPLETE** - Dashboard and Reports page now fully integrated with database!
-
-Both pages now show real, live data from your Supabase database with proper multi-tenancy support.
+## Notes
+- The Dashboard page (`client/pages/Dashboard.tsx`) does NOT show academic analytics
+- Academic analytics are only available on the Reports page
+- Reports page is accessible only to admin users
+- The fix maintains multi-tenancy (filters by school_id)
+- The fix respects the dynamic academic year and term from school settings
+- Current term can now be changed in Settings page and will affect all modules

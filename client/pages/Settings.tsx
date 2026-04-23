@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { TeacherManagementInterface } from "@/components/TeacherManagement";
+import { useAcademicYear } from "@/hooks/use-academic-year";
 
 interface Term {
   id: string;
@@ -72,6 +73,7 @@ export default function SettingsPage() {
   const [schoolPhone, setSchoolPhone] = useState("");
   const [schoolEmail, setSchoolEmail] = useState("");
   const [academicYear, setAcademicYear] = useState("");
+  const [currentTerm, setCurrentTerm] = useState("");
   
   // File upload states
   const [schoolLogo, setSchoolLogo] = useState<File | null>(null);
@@ -113,7 +115,7 @@ export default function SettingsPage() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   const classes = ["KG1", "KG2", "P1", "P2", "P3", "P4", "P5", "P6", "JHS1", "JHS2", "JHS3"];
-  const currentAcademicYear = "2024/2025";
+  const { academicYear: currentAcademicYear } = useAcademicYear();
 
   // Load grades from database on mount
   useEffect(() => {
@@ -197,6 +199,7 @@ export default function SettingsPage() {
         setSchoolPhone(data.school_phone || '');
         setSchoolEmail(data.school_email || '');
         setAcademicYear(data.current_academic_year || '2024/2025');
+        setCurrentTerm(data.current_term || 'Term 1');
         setLogoPreview(data.school_logo_url || '');
         setSignaturePreview(data.headmaster_signature_url || '');
       }
@@ -591,66 +594,170 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File Too Large",
-          description: "Please upload an image smaller than 5MB.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!file.type.startsWith("image/")) {
-        toast({
-          title: "Invalid File Type",
-          description: "Please upload an image file (PNG, JPG).",
-          variant: "destructive",
-        });
-        return;
-      }
-      setSchoolLogo(file);
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please upload an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload an image file (PNG, JPG).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!profile?.school_id) {
+      toast({
+        title: "Error",
+        description: "School information not found.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Show preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setLogoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${profile.school_id}/logo.${fileExt}`;
+      
+      // Delete old logo if exists
+      await supabase.storage
+        .from('school-assets')
+        .remove([fileName]);
+
+      // Upload new logo
+      const { data, error } = await supabase.storage
+        .from('school-assets')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('school-assets')
+        .getPublicUrl(fileName);
+
+      setLogoPreview(publicUrl);
+
+      // Save URL to database
+      await supabase
+        .from('school_settings')
+        .update({ school_logo_url: publicUrl })
+        .eq('school_id', profile.school_id);
+
       toast({
         title: "Logo Uploaded",
         description: `${file.name} has been uploaded successfully.`,
       });
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload logo. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File Too Large",
-          description: "Please upload an image smaller than 5MB.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!file.type.startsWith("image/")) {
-        toast({
-          title: "Invalid File Type",
-          description: "Please upload an image file (PNG, JPG).",
-          variant: "destructive",
-        });
-        return;
-      }
-      setSignature(file);
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please upload an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload an image file (PNG, JPG).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!profile?.school_id) {
+      toast({
+        title: "Error",
+        description: "School information not found.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Show preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setSignaturePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${profile.school_id}/signature.${fileExt}`;
+      
+      // Delete old signature if exists
+      await supabase.storage
+        .from('school-assets')
+        .remove([fileName]);
+
+      // Upload new signature
+      const { data, error } = await supabase.storage
+        .from('school-assets')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('school-assets')
+        .getPublicUrl(fileName);
+
+      setSignaturePreview(publicUrl);
+
+      // Save URL to database
+      await supabase
+        .from('school_settings')
+        .update({ headmaster_signature_url: publicUrl })
+        .eq('school_id', profile.school_id);
+
       toast({
         title: "Signature Uploaded",
         description: `${file.name} has been uploaded successfully.`,
+      });
+    } catch (error) {
+      console.error('Error uploading signature:', error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload signature. Please try again.",
+        variant: "destructive",
       });
     }
   };
@@ -834,6 +941,48 @@ export default function SettingsPage() {
     });
   };
 
+  const handleSaveSchoolSettings = async () => {
+    if (!profile?.school_id) {
+      toast({
+        title: "Error",
+        description: "School information not found. Please contact support.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('school_settings')
+        .update({
+          school_name: schoolName,
+          school_address: schoolAddress,
+          school_phone: schoolPhone,
+          school_email: schoolEmail,
+          current_academic_year: academicYear,
+          current_term: currentTerm,
+        })
+        .eq('id', profile.school_id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Settings Saved",
+        description: "School settings have been updated successfully.",
+      });
+      
+      // Reload settings to confirm
+      await loadSchoolSettings();
+    } catch (error) {
+      console.error('Error saving school settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save school settings.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleImportData = () => {
     // In production, this would open a file picker
     toast({
@@ -905,15 +1054,39 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-                <div>
-                  <Label htmlFor="year">Academic Year</Label>
-                  <Input
-                    id="year"
-                    value={academicYear}
-                    onChange={(e) => setAcademicYear(e.target.value)}
-                    className="mt-2"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="year">Academic Year</Label>
+                    <Input
+                      id="year"
+                      value={academicYear}
+                      onChange={(e) => setAcademicYear(e.target.value)}
+                      placeholder="e.g., 2024/2025"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="term">Current Term</Label>
+                    <select
+                      id="term"
+                      value={currentTerm}
+                      onChange={(e) => setCurrentTerm(e.target.value)}
+                      className="mt-2 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="Term 1">Term 1</option>
+                      <option value="Term 2">Term 2</option>
+                      <option value="Term 3">Term 3</option>
+                    </select>
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  These settings will be used across all modules (Academic, Attendance, Finance, Reports, etc.)
+                </p>
+                
+                <Button onClick={handleSaveSchoolSettings} className="w-full sm:w-auto">
+                  <Check className="w-4 h-4 mr-2" />
+                  Save School Settings
+                </Button>
               </div>
 
               <div className="space-y-4 pt-4 border-t border-border">

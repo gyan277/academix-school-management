@@ -9,6 +9,7 @@ import { BookOpen, FileText, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateStudentReportCard } from "@/lib/export-utils";
 import { supabase } from "@/lib/supabase";
+import { useAcademicYear } from "@/hooks/use-academic-year";
 
 interface StudentScore {
   id: string;
@@ -74,9 +75,11 @@ export default function Academic() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [schoolLogo, setSchoolLogo] = useState<string>("");
+  const [headmasterSignature, setHeadmasterSignature] = useState<string>("");
 
   const schoolName = localStorage.getItem("schoolName") || "Your School";
-  const currentAcademicYear = "2024/2025";
+  const { academicYear: currentAcademicYear } = useAcademicYear();
 
   // Load user profile and grading scale
   useEffect(() => {
@@ -141,6 +144,18 @@ export default function Academic() {
               { grade: "E1", minScore: 30, maxScore: 34 },
               { grade: "F", minScore: 0, maxScore: 29 },
             ]);
+          }
+
+          // Load school settings (logo and signature)
+          const { data: settings } = await supabase
+            .from('school_settings')
+            .select('school_logo_url, headmaster_signature_url')
+            .eq('school_id', profile.school_id)
+            .single();
+          
+          if (settings) {
+            setSchoolLogo(settings.school_logo_url || '');
+            setHeadmasterSignature(settings.headmaster_signature_url || '');
           }
         }
       }
@@ -645,7 +660,7 @@ export default function Academic() {
       attendance: "95", // Mock data
     };
 
-    generateStudentReportCard(studentData, schoolName);
+    generateStudentReportCard(studentData, schoolName, schoolLogo, headmasterSignature);
     toast({
       title: "Download Started",
       description: `Report card for ${report.name} is being downloaded.`,

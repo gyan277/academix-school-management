@@ -56,6 +56,9 @@ export default function Registrar() {
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [isStudentDialogOpen, setIsStudentDialogOpen] = useState(false);
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false);
+  const [studentSortBy, setStudentSortBy] = useState<"lastName" | "firstName" | "studentNumber" | "admissionDate">("lastName");
+  const [staffSortBy, setStaffSortBy] = useState<"lastName" | "firstName" | "staffNumber" | "employmentDate">("lastName");
+  const [selectedStudentsForPromotion, setSelectedStudentsForPromotion] = useState<Set<string>>(new Set());
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [newStudent, setNewStudent] = useState({
@@ -136,21 +139,80 @@ export default function Registrar() {
     }
   };
 
+  // Helper function to extract last name and first name
+  const getNameParts = (fullName: string) => {
+    const parts = fullName.trim().split(" ");
+    if (parts.length === 1) {
+      return { firstName: parts[0], lastName: parts[0] };
+    }
+    const lastName = parts[parts.length - 1];
+    const firstName = parts.slice(0, -1).join(" ");
+    return { firstName, lastName };
+  };
+
+  // Sort students
+  const sortStudents = (studentList: Student[]) => {
+    return [...studentList].sort((a, b) => {
+      switch (studentSortBy) {
+        case "lastName": {
+          const aName = getNameParts(a.full_name);
+          const bName = getNameParts(b.full_name);
+          return aName.lastName.localeCompare(bName.lastName) || aName.firstName.localeCompare(bName.firstName);
+        }
+        case "firstName": {
+          const aName = getNameParts(a.full_name);
+          const bName = getNameParts(b.full_name);
+          return aName.firstName.localeCompare(bName.firstName) || aName.lastName.localeCompare(bName.lastName);
+        }
+        case "studentNumber":
+          return (a.student_number || a.student_id || "").localeCompare(b.student_number || b.student_id || "");
+        case "admissionDate":
+          return new Date(a.admission_date).getTime() - new Date(b.admission_date).getTime();
+        default:
+          return 0;
+      }
+    });
+  };
+
+  // Sort staff
+  const sortStaff = (staffList: Staff[]) => {
+    return [...staffList].sort((a, b) => {
+      switch (staffSortBy) {
+        case "lastName": {
+          const aName = getNameParts(a.full_name);
+          const bName = getNameParts(b.full_name);
+          return aName.lastName.localeCompare(bName.lastName) || aName.firstName.localeCompare(bName.firstName);
+        }
+        case "firstName": {
+          const aName = getNameParts(a.full_name);
+          const bName = getNameParts(b.full_name);
+          return aName.firstName.localeCompare(bName.firstName) || aName.lastName.localeCompare(bName.lastName);
+        }
+        case "staffNumber":
+          return (a.staff_id || "").localeCompare(b.staff_id || "");
+        case "employmentDate":
+          return new Date(a.employment_date).getTime() - new Date(b.employment_date).getTime();
+        default:
+          return 0;
+      }
+    });
+  };
+
   // Filter students
-  const filteredStudents = students.filter((student) => {
+  const filteredStudents = sortStudents(students.filter((student) => {
     const matchesSearch =
       student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (student.student_number && student.student_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (student.student_id && student.student_id.includes(searchTerm));
     const matchesClass = !selectedClass || student.class === selectedClass;
     return matchesSearch && matchesClass;
-  });
+  }));
 
   // Filter staff
-  const filteredStaff = staff.filter((member) =>
+  const filteredStaff = sortStaff(staff.filter((member) =>
     member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.staff_id.includes(searchTerm)
-  );
+  ));
 
   const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.dob || !newStudent.class || !newStudent.parentName) {
@@ -518,6 +580,141 @@ export default function Registrar() {
     }
   };
 
+  const handleSelectivePromotion = async (fromClass: string) => {
+    const currentIndex = classes.indexOf(fromClass);
+    const nextClass = classes[currentIndex + 1];
+    
+    const classStudents = students.filter(s => s.class === fromClass && s.status === "active");
+    const selectedIds = Array.from(selectedStudentsForPromotion);
+    const studentsToPromote = classStudents.filter(s => selectedIds.includes(s.id));
+    const studentsToRepeat = classStudents.filter(s => !selectedIds.includes(s.id));
+
+    if (studentsToPromote.length === 0) {
+      toast({
+        title: "No Students Selected",
+        description: "Please select at least one student to promote",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Special handling for JHS3 - Graduate instead of promote
+    if (fromClass === "JHS3") {
+      const message = studentsToRepeat.length > 0
+        ? `Graduate ${studentsToPromote.length} students and keep ${studentsToRepeat.length} students in JHS3?`
+        : `Graduate all ${studentsToPromote.length} selected students from JHS3?`;
+      
+      if (!confirm(message)) return;
+
+      try {
+        // Mark selected students as graduated
+        const { error } = await supabase
+          .from("students")
+          .update({ 
+            status: "graduated",
+            graduation_date: new Date().toISOString().split("T")[0]
+          })
+          .in("id", studentsToPromote.map(s => s.id));
+
+        if (error) throw error;
+
+        // Remove graduated students from local state
+        setStudents(students.filter(student => 
+          !studentsToPromote.find(s => s.id === student.id)
+        ));
+
+        // Clear selection
+        setSelectedStudentsForPromotion(new Set());
+
+        toast({
+          title: "Success!",
+          description: `Graduated ${studentsToPromote.length} students. ${studentsToRepeat.length} students will repeat JHS3.`,
+        });
+      } catch (error) {
+        console.error("Error graduating students:", error);
+        toast({
+          title: "Error",
+          description: "Failed to graduate students",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Regular promotion for other classes
+    if (!nextClass) {
+      toast({
+        title: "Cannot Promote",
+        description: `${fromClass} is the highest class`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const message = studentsToRepeat.length > 0
+      ? `Promote ${studentsToPromote.length} students to ${nextClass} and keep ${studentsToRepeat.length} students in ${fromClass}?`
+      : `Promote all ${studentsToPromote.length} selected students to ${nextClass}?`;
+    
+    if (!confirm(message)) return;
+
+    try {
+      // Update selected students to next class
+      const { error } = await supabase
+        .from("students")
+        .update({ class: nextClass })
+        .in("id", studentsToPromote.map(s => s.id));
+
+      if (error) throw error;
+
+      // Update local state
+      setStudents(students.map(student => 
+        studentsToPromote.find(s => s.id === student.id)
+          ? { ...student, class: nextClass }
+          : student
+      ));
+
+      // Clear selection
+      setSelectedStudentsForPromotion(new Set());
+
+      toast({
+        title: "Success",
+        description: `Promoted ${studentsToPromote.length} students to ${nextClass}. ${studentsToRepeat.length} students will repeat ${fromClass}.`,
+      });
+    } catch (error) {
+      console.error("Error promoting students:", error);
+      toast({
+        title: "Error",
+        description: "Failed to promote students",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleStudentSelection = (studentId: string) => {
+    const newSelection = new Set(selectedStudentsForPromotion);
+    if (newSelection.has(studentId)) {
+      newSelection.delete(studentId);
+    } else {
+      newSelection.add(studentId);
+    }
+    setSelectedStudentsForPromotion(newSelection);
+  };
+
+  const toggleSelectAll = (classLevel: string) => {
+    const classStudents = students.filter(s => s.class === classLevel && s.status === "active");
+    const allSelected = classStudents.every(s => selectedStudentsForPromotion.has(s.id));
+    
+    const newSelection = new Set(selectedStudentsForPromotion);
+    if (allSelected) {
+      // Deselect all from this class
+      classStudents.forEach(s => newSelection.delete(s.id));
+    } else {
+      // Select all from this class
+      classStudents.forEach(s => newSelection.add(s.id));
+    }
+    setSelectedStudentsForPromotion(newSelection);
+  };
+
   // Count students per class
   const classStudentCount = (classLevel: string) => {
     return students.filter((s) => s.class === classLevel).length;
@@ -557,6 +754,19 @@ export default function Registrar() {
                   ))}
                 </select>
               </div>
+              {/* Sort By Dropdown */}
+              <div className="w-full sm:w-48">
+                <select
+                  value={studentSortBy}
+                  onChange={(e) => setStudentSortBy(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm h-10"
+                >
+                  <option value="lastName">Sort by Last Name</option>
+                  <option value="firstName">Sort by First Name</option>
+                  <option value="studentNumber">Sort by Student Number</option>
+                  <option value="admissionDate">Sort by Admission Date</option>
+                </select>
+              </div>
               {/* Search Input */}
               <div className="relative flex-1 sm:max-w-xs">
                 <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
@@ -591,7 +801,7 @@ export default function Registrar() {
                       onChange={(e) =>
                         setNewStudent({ ...newStudent, name: e.target.value })
                       }
-                      placeholder="John Doe"
+                      placeholder="Daniel Gyan"
                     />
                   </div>
                   <div>
@@ -657,7 +867,7 @@ export default function Registrar() {
                       onChange={(e) =>
                         setNewStudent({ ...newStudent, parentPhone: e.target.value })
                       }
-                      placeholder="+233501234567"
+                      placeholder="+233503413080"
                     />
                   </div>
                   <Button onClick={handleAddStudent} className="w-full">
@@ -770,35 +980,100 @@ export default function Registrar() {
           {selectedClass && (
             <Card className="border-border/50">
               <CardHeader>
-                <CardTitle>Class {selectedClass} - Students</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Class {selectedClass} - Students</span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleSelectAll(selectedClass)}
+                    >
+                      {students.filter(s => s.class === selectedClass && s.status === "active").every(s => selectedStudentsForPromotion.has(s.id))
+                        ? "Deselect All"
+                        : "Select All"}
+                    </Button>
+                  </div>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {students
-                    .filter((s) => s.class === selectedClass)
+                    .filter((s) => s.class === selectedClass && s.status === "active")
                     .map((student) => (
                       <div
                         key={student.id}
-                        className="p-3 border border-border/50 rounded-lg flex justify-between items-center"
+                        className="p-3 border border-border/50 rounded-lg flex justify-between items-center hover:bg-muted/50 transition-colors"
                       >
-                        <div>
-                          <p className="font-medium text-foreground">{student.full_name}</p>
-                          <p className="text-sm text-muted-foreground">{student.student_number || student.student_id || 'No ID'}</p>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentsForPromotion.has(student.id)}
+                            onChange={() => toggleStudentSelection(student.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                          />
+                          <div>
+                            <p className="font-medium text-foreground">{student.full_name}</p>
+                            <p className="text-sm text-muted-foreground">{student.student_number || student.student_id || 'No ID'}</p>
+                          </div>
                         </div>
                         <Badge>{student.gender}</Badge>
                       </div>
                     ))}
                 </div>
-                <Button 
-                  className="w-full mt-6"
-                  onClick={() => handlePromoteClass(selectedClass)}
-                  variant={selectedClass === "JHS3" ? "destructive" : "default"}
-                >
-                  {selectedClass === "JHS3" 
-                    ? `Graduate All JHS3 Students (${students.filter(s => s.class === "JHS3" && s.status === "active").length})`
-                    : `Promote All to ${classes[classes.indexOf(selectedClass) + 1] || 'Next Class'}`
-                  }
-                </Button>
+                
+                {students.filter(s => s.class === selectedClass && s.status === "active").length === 0 && (
+                  <p className="text-center text-muted-foreground py-8">No students in this class</p>
+                )}
+                
+                <div className="mt-6 space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <span className="text-sm font-medium">
+                      {selectedStudentsForPromotion.size > 0 
+                        ? `${selectedStudentsForPromotion.size} student(s) selected for promotion`
+                        : "No students selected"}
+                    </span>
+                    {selectedStudentsForPromotion.size > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedStudentsForPromotion(new Set())}
+                      >
+                        Clear Selection
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button 
+                      className="w-full"
+                      onClick={() => handlePromoteClass(selectedClass)}
+                      variant={selectedClass === "JHS3" ? "destructive" : "default"}
+                    >
+                      {selectedClass === "JHS3" 
+                        ? `Graduate All (${students.filter(s => s.class === "JHS3" && s.status === "active").length})`
+                        : `Promote All to ${classes[classes.indexOf(selectedClass) + 1] || 'Next Class'}`
+                      }
+                    </Button>
+                    
+                    <Button 
+                      className="w-full"
+                      onClick={() => handleSelectivePromotion(selectedClass)}
+                      variant="outline"
+                      disabled={selectedStudentsForPromotion.size === 0}
+                    >
+                      {selectedClass === "JHS3" 
+                        ? `Graduate Selected (${selectedStudentsForPromotion.size})`
+                        : `Promote Selected (${selectedStudentsForPromotion.size})`
+                      }
+                    </Button>
+                  </div>
+                  
+                  {selectedStudentsForPromotion.size > 0 && selectedStudentsForPromotion.size < students.filter(s => s.class === selectedClass && s.status === "active").length && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      {students.filter(s => s.class === selectedClass && s.status === "active").length - selectedStudentsForPromotion.size} student(s) will repeat {selectedClass}
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -807,8 +1082,22 @@ export default function Registrar() {
         {/* STAFF TAB */}
         <TabsContent value="staff" className="space-y-6 mt-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex-1 w-full sm:max-w-xs">
-              <div className="relative">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full">
+              {/* Sort By Dropdown */}
+              <div className="w-full sm:w-48">
+                <select
+                  value={staffSortBy}
+                  onChange={(e) => setStaffSortBy(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm h-10"
+                >
+                  <option value="lastName">Sort by Last Name</option>
+                  <option value="firstName">Sort by First Name</option>
+                  <option value="staffNumber">Sort by Staff Number</option>
+                  <option value="employmentDate">Sort by Employment Date</option>
+                </select>
+              </div>
+              {/* Search Input */}
+              <div className="relative flex-1 sm:max-w-xs">
                 <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search staff..."
@@ -852,7 +1141,7 @@ export default function Registrar() {
                       onChange={(e) =>
                         setNewStaff({ ...newStaff, phone: e.target.value })
                       }
-                      placeholder="+233501234567"
+                      placeholder="+233503413080"
                     />
                   </div>
                   <div>
@@ -965,7 +1254,7 @@ export default function Registrar() {
                   onChange={(e) =>
                     setEditingStudent({ ...editingStudent, full_name: e.target.value })
                   }
-                  placeholder="John Doe"
+                  placeholder="Daniel Gyan"
                 />
               </div>
               <div>
@@ -1031,7 +1320,7 @@ export default function Registrar() {
                   onChange={(e) =>
                     setEditingStudent({ ...editingStudent, parent_phone: e.target.value })
                   }
-                  placeholder="+233501234567"
+                  placeholder="+233503413080"
                 />
               </div>
               <div className="flex gap-2">
@@ -1084,7 +1373,7 @@ export default function Registrar() {
                   onChange={(e) =>
                     setEditingStaff({ ...editingStaff, phone: e.target.value })
                   }
-                  placeholder="+233501234567"
+                  placeholder="+233503413080"
                 />
               </div>
               <div>

@@ -15,6 +15,7 @@ import {
 import { Calendar, CheckCircle, XCircle, Clock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { useAcademicYear } from "@/hooks/use-academic-year";
 
 interface AttendanceRecord {
   id: string;
@@ -49,9 +50,45 @@ export default function Attendance() {
   const [detailsRecords, setDetailsRecords] = useState<any[]>([]);
   const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [studentSortBy, setStudentSortBy] = useState<"lastName" | "firstName" | "studentNumber">("lastName");
+  const [staffSortBy, setStaffSortBy] = useState<"lastName" | "firstName" | "staffNumber">("lastName");
 
-  const currentAcademicYear = "2024/2025";
+  const { academicYear: currentAcademicYear } = useAcademicYear();
   const isAdmin = profile?.role === "admin";
+
+  // Helper function to extract last name and first name
+  const getNameParts = (fullName: string) => {
+    const parts = fullName.trim().split(" ");
+    if (parts.length === 1) {
+      return { firstName: parts[0], lastName: parts[0] };
+    }
+    const lastName = parts[parts.length - 1];
+    const firstName = parts.slice(0, -1).join(" ");
+    return { firstName, lastName };
+  };
+
+  // Sort attendance records
+  const sortAttendanceRecords = (records: AttendanceRecord[], sortBy: "lastName" | "firstName" | "studentNumber" | "staffNumber") => {
+    return [...records].sort((a, b) => {
+      switch (sortBy) {
+        case "lastName": {
+          const aName = getNameParts(a.name);
+          const bName = getNameParts(b.name);
+          return aName.lastName.localeCompare(bName.lastName) || aName.firstName.localeCompare(bName.firstName);
+        }
+        case "firstName": {
+          const aName = getNameParts(a.name);
+          const bName = getNameParts(b.name);
+          return aName.firstName.localeCompare(bName.firstName) || aName.lastName.localeCompare(bName.lastName);
+        }
+        case "studentNumber":
+        case "staffNumber":
+          return a.id.localeCompare(b.id);
+        default:
+          return 0;
+      }
+    });
+  };
 
   // Load teacher's assigned classes
   useEffect(() => {
@@ -383,7 +420,7 @@ export default function Attendance() {
   };
 
   const currentRecords =
-    selectedTab === "students" ? studentAttendance : staffAttendance;
+    selectedTab === "students" ? sortAttendanceRecords(studentAttendance, studentSortBy) : sortAttendanceRecords(staffAttendance, staffSortBy);
   const total = currentRecords.length;
   const present = currentRecords.filter((r) => r.status === "present").length;
   const absent = currentRecords.filter((r) => r.status === "absent").length;
@@ -420,7 +457,7 @@ export default function Attendance() {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div>
                   <Label htmlFor="class">Class</Label>
                   <select
@@ -451,6 +488,19 @@ export default function Attendance() {
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full px-3 py-2 border border-input rounded-md bg-background mt-2"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="studentSort">Sort By</Label>
+                  <select
+                    id="studentSort"
+                    value={studentSortBy}
+                    onChange={(e) => setStudentSortBy(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background mt-2"
+                  >
+                    <option value="lastName">Last Name</option>
+                    <option value="firstName">First Name</option>
+                    <option value="studentNumber">Student Number</option>
+                  </select>
                 </div>
                 <div className="flex items-end">
                   <Button onClick={handleSaveAttendance} className="w-full">
@@ -574,7 +624,7 @@ export default function Attendance() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Date Filter */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="staffDate">Date</Label>
                     <input
@@ -584,6 +634,19 @@ export default function Attendance() {
                       onChange={(e) => setSelectedDate(e.target.value)}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background mt-2"
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="staffSort">Sort By</Label>
+                    <select
+                      id="staffSort"
+                      value={staffSortBy}
+                      onChange={(e) => setStaffSortBy(e.target.value as any)}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background mt-2"
+                    >
+                      <option value="lastName">Last Name</option>
+                      <option value="firstName">First Name</option>
+                      <option value="staffNumber">Staff Number</option>
+                    </select>
                   </div>
                   <div className="flex items-end">
                     <Button onClick={handleSaveAttendance} className="w-full">

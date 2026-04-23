@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { TeacherProfile } from '@shared/types';
+import { useAcademicYear } from '@/hooks/use-academic-year';
 import {
   validateEmail,
   validateName,
@@ -47,6 +48,7 @@ interface Credentials {
 export function TeacherManagementInterface() {
   const { profile } = useAuth();
   const { toast } = useToast();
+  const { academicYear } = useAcademicYear();
   
   const [teachers, setTeachers] = useState<TeacherProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -269,7 +271,6 @@ export function TeacherManagementInterface() {
 
       // Step 3: Create class assignments with validation
       if (data.classes && data.classes.length > 0) {
-        const academicYear = "2024/2025"; // Use consistent academic year
         
         // Validate school_id matches for each class
         for (const className of data.classes) {
@@ -382,7 +383,6 @@ export function TeacherManagementInterface() {
       }
 
       if (data.classes && data.classes.length > 0) {
-        const academicYear = "2024/2025"; // Use consistent academic year
         
         // Validate school_id matches for each class
         const teacherData = await supabase
@@ -801,7 +801,7 @@ function CreateTeacherDialog({ isOpen, onClose, onSubmit, availableClasses }: Cr
                 setFormData({ ...formData, full_name: e.target.value });
                 setErrors({ ...errors, full_name: undefined });
               }}
-              placeholder="John Doe"
+              placeholder="Daniel Gyan"
             />
             {errors.full_name && <p className="text-sm text-destructive">{errors.full_name}</p>}
           </div>
