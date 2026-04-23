@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Calendar, CheckCircle, XCircle, Clock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -36,8 +43,43 @@ export default function Attendance() {
   const [staffAttendance, setStaffAttendance] = useState<AttendanceRecord[]>([]);
   const [attendanceHistory, setAttendanceHistory] = useState<DailyAttendance[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsRecords, setDetailsRecords] = useState<any[]>([]);
+  const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
+  const [isTeacher, setIsTeacher] = useState(false);
 
+  const currentAcademicYear = "2024/2025";
   const isAdmin = profile?.role === "admin";
+
+  // Load teacher's assigned classes
+  useEffect(() => {
+    const loadTeacherClasses = async () => {
+      if (profile && profile.role === 'teacher') {
+        setIsTeacher(true);
+        
+        const { data: assignments } = await supabase
+          .from('teacher_classes')
+          .select('class')
+          .eq('teacher_id', profile.id)
+          .eq('academic_year', currentAcademicYear);
+        
+        if (assignments && assignments.length > 0) {
+          const uniqueClasses = [...new Set(assignments.map(a => a.class))];
+          setTeacherClasses(uniqueClasses);
+          // Auto-select first assigned class
+          if (uniqueClasses.length > 0) {
+            setSelectedClass(uniqueClasses[0]);
+          }
+        }
+      }
+    };
+    
+    if (profile) {
+      loadTeacherClasses();
+    }
+  }, [profile]);
 
   // Set correct default tab based on role
   useEffect(() => {
@@ -50,12 +92,12 @@ export default function Attendance() {
     }
   }, [profile, selectedTab]);
 
-  // Load students when class changes (for teachers)
+  // Load students when class changes (for teachers) - wait for profile to load
   useEffect(() => {
-    if (!isAdmin && selectedClass && selectedTab === "students") {
+    if (!isAdmin && selectedClass && selectedTab === "students" && profile?.school_id) {
       loadStudents();
     }
-  }, [selectedClass, isAdmin, selectedTab]);
+  }, [selectedClass, isAdmin, selectedTab, profile?.school_id]);
 
   // Load staff when Staff tab is selected (for admins)
   useEffect(() => {
@@ -130,14 +172,30 @@ export default function Attendance() {
   const loadStudents = async () => {
     try {
       setLoadingData(true);
+      
+      // CRITICAL: Explicitly filter by school_id for multi-tenancy
+      if (!profile?.school_id) {
+        console.log("⚠️ Profile school_id not loaded yet, waiting...");
+        setLoadingData(false);
+        return;
+      }
+
+      console.log("🔍 Loading students for attendance - class:", selectedClass, "school_id:", profile.school_id);
+      
       const { data, error } = await supabase
         .from("students")
-        .select("id, student_number, full_name")
+        .select("id, student_number, full_name, school_id")
         .eq("class", selectedClass)
         .eq("status", "active")
+        .eq("school_id", profile.school_id) // EXPLICIT school_id filter
         .order("full_name");
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Error loading students:", error);
+        throw error;
+      }
+
+      console.log("✅ Loaded students for attendance:", data?.length || 0, "students");
 
       // Convert to attendance records with default "present" status
       const records: AttendanceRecord[] = (data || []).map((student) => ({
@@ -282,6 +340,48 @@ export default function Attendance() {
     }
   };
 
+  const handleViewDetails = async (date: string) => {
+    try {
+      setSelectedHistoryDate(date);
+      setDetailsDialogOpen(true);
+      setDetailsLoading(true);
+      setDetailsRecords([]);
+
+      // Load attendance records for this date with student/staff names
+      const { data, error } = await supabase
+        .from("attendance")
+        .select(`
+          *,
+          students:student_id (full_name, student_number, class),
+          staff:staff_id (full_name, staff_number)
+        `)
+        .eq("school_id", profile?.school_id)
+        .eq("date", date)
+        .order("status");
+
+      if (error) throw error;
+
+      // Format the records
+      const formatted = (data || []).map((record: any) => ({
+        name: record.students?.full_name || record.staff?.full_name || "Unknown",
+        number: record.students?.student_number || record.staff?.staff_number || "N/A",
+        class: record.students?.class || "Staff",
+        status: record.status,
+      }));
+
+      setDetailsRecords(formatted);
+    } catch (error) {
+      console.error("Error loading attendance details:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load attendance details",
+        variant: "destructive",
+      });
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
   const currentRecords =
     selectedTab === "students" ? studentAttendance : staffAttendance;
   const total = currentRecords.length;
@@ -328,13 +428,19 @@ export default function Attendance() {
                     value={selectedClass}
                     onChange={(e) => setSelectedClass(e.target.value)}
                     className="w-full px-3 py-2 border border-input rounded-md bg-background mt-2"
+                    disabled={isTeacher && teacherClasses.length === 0}
                   >
-                    {classes.map((cls) => (
+                    {(isTeacher ? teacherClasses : classes).map((cls) => (
                       <option key={cls} value={cls}>
                         {cls}
                       </option>
                     ))}
                   </select>
+                  {isTeacher && teacherClasses.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      No classes assigned. Contact admin.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="date">Date</Label>
@@ -584,7 +690,11 @@ export default function Attendance() {
                       </p>
                       <p className="text-xs text-muted-foreground">Attendance Rate</p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewDetails(history.date)}
+                    >
                       View Details
                     </Button>
                   </div>
@@ -595,6 +705,95 @@ export default function Attendance() {
         </TabsContent>
       </Tabs>
       )}
+
+      {/* Attendance Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Attendance Details - {selectedHistoryDate}</DialogTitle>
+            <DialogDescription>
+              Detailed attendance records for this date
+            </DialogDescription>
+          </DialogHeader>
+          
+          {detailsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : detailsRecords.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No attendance records found for this date
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {detailsRecords.filter(r => r.status === "present").length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Present</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-red-600">
+                    {detailsRecords.filter(r => r.status === "absent").length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Absent</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {detailsRecords.filter(r => r.status === "late").length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Late</p>
+                </div>
+              </div>
+
+              {/* Records Table */}
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Name</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Number</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold">Class</th>
+                      <th className="px-4 py-2 text-center text-sm font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailsRecords.map((record, index) => (
+                      <tr key={index} className="border-t border-border hover:bg-muted/30">
+                        <td className="px-4 py-3 text-sm">{record.name}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{record.number}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{record.class}</td>
+                        <td className="px-4 py-3 text-center">
+                          {record.status === "present" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">
+                              <CheckCircle className="w-3 h-3" />
+                              Present
+                            </span>
+                          )}
+                          {record.status === "absent" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-medium">
+                              <XCircle className="w-3 h-3" />
+                              Absent
+                            </span>
+                          )}
+                          {record.status === "late" && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs font-medium">
+                              <Clock className="w-3 h-3" />
+                              Late
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

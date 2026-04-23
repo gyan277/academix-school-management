@@ -56,6 +56,8 @@ export default function Registrar() {
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [isStudentDialogOpen, setIsStudentDialogOpen] = useState(false);
   const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [newStudent, setNewStudent] = useState({
     name: "",
     dob: "",
@@ -71,23 +73,40 @@ export default function Registrar() {
     specialization: "",
   });
 
-  // Load students and staff from database
+  // Load students and staff from database - wait for profile
   useEffect(() => {
-    loadData();
-  }, []);
+    if (profile?.school_id) {
+      loadData();
+    }
+  }, [profile?.school_id]);
 
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // CRITICAL: Wait for profile to load before querying
+      if (!profile?.school_id) {
+        console.log("⚠️ Profile school_id not loaded yet, waiting...");
+        setLoading(false);
+        return;
+      }
+
+      console.log("🔍 Loading registrar data for school_id:", profile.school_id);
       
       // Load students
       const { data: studentsData, error: studentsError } = await supabase
         .from("students")
         .select("*")
         .eq("status", "active")
+        .eq("school_id", profile.school_id) // EXPLICIT school_id filter
         .order("full_name");
 
-      if (studentsError) throw studentsError;
+      if (studentsError) {
+        console.error("❌ Error loading students:", studentsError);
+        throw studentsError;
+      }
+      
+      console.log("✅ Loaded students:", studentsData?.length || 0);
       setStudents(studentsData || []);
 
       // Load staff
@@ -95,9 +114,15 @@ export default function Registrar() {
         .from("staff")
         .select("*")
         .eq("status", "active")
+        .eq("school_id", profile.school_id) // EXPLICIT school_id filter
         .order("full_name");
 
-      if (staffError) throw staffError;
+      if (staffError) {
+        console.error("❌ Error loading staff:", staffError);
+        throw staffError;
+      }
+      
+      console.log("✅ Loaded staff:", staffData?.length || 0);
       setStaff(staffData || []);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -219,6 +244,49 @@ export default function Registrar() {
     }
   };
 
+  const handleEditStudent = async (student: Student) => {
+    if (!student.full_name || !student.date_of_birth || !student.class || !student.parent_name) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({
+          full_name: student.full_name,
+          date_of_birth: student.date_of_birth,
+          gender: student.gender,
+          class: student.class,
+          parent_name: student.parent_name,
+          parent_phone: student.parent_phone,
+        })
+        .eq("id", student.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setStudents(students.map(s => s.id === student.id ? student : s));
+      setEditingStudent(null);
+      
+      toast({
+        title: "Success",
+        description: `Student ${student.full_name} updated successfully`,
+      });
+    } catch (error) {
+      console.error("Error updating student:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update student in database",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleAddStaff = async () => {
     if (!newStaff.name || !newStaff.position || !newStaff.phone) {
       toast({
@@ -302,6 +370,140 @@ export default function Registrar() {
       toast({
         title: "Error",
         description: "Failed to delete staff member",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditStaff = async (staffMember: Staff) => {
+    if (!staffMember.full_name || !staffMember.position || !staffMember.phone) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("staff")
+        .update({
+          full_name: staffMember.full_name,
+          phone: staffMember.phone,
+          position: staffMember.position,
+          specialization: staffMember.specialization,
+        })
+        .eq("id", staffMember.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setStaff(staff.map(s => s.id === staffMember.id ? staffMember : s));
+      setEditingStaff(null);
+      
+      toast({
+        title: "Success",
+        description: `Staff member ${staffMember.full_name} updated successfully`,
+      });
+    } catch (error) {
+      console.error("Error updating staff:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update staff member in database",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePromoteClass = async (fromClass: string) => {
+    const currentIndex = classes.indexOf(fromClass);
+    const nextClass = classes[currentIndex + 1];
+
+    const studentsToPromote = students.filter(s => s.class === fromClass && s.status === "active");
+
+    if (studentsToPromote.length === 0) {
+      toast({
+        title: "No Students",
+        description: `No students found in ${fromClass} to promote`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Special handling for JHS3 - Graduate instead of promote
+    if (fromClass === "JHS3") {
+      if (!confirm(`Are you sure you want to graduate ${studentsToPromote.length} students from JHS3? They will be marked as graduated and removed from the active student list.`)) {
+        return;
+      }
+
+      try {
+        // Mark students as graduated (inactive)
+        const { error } = await supabase
+          .from("students")
+          .update({ 
+            status: "graduated",
+            graduation_date: new Date().toISOString().split("T")[0]
+          })
+          .in("id", studentsToPromote.map(s => s.id));
+
+        if (error) throw error;
+
+        // Remove from local state (they're no longer active)
+        setStudents(students.filter(student => 
+          !studentsToPromote.find(s => s.id === student.id)
+        ));
+
+        toast({
+          title: "Congratulations!",
+          description: `Successfully graduated ${studentsToPromote.length} students from JHS3`,
+        });
+      } catch (error) {
+        console.error("Error graduating students:", error);
+        toast({
+          title: "Error",
+          description: "Failed to graduate students",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    // Regular promotion for other classes
+    if (!nextClass) {
+      toast({
+        title: "Cannot Promote",
+        description: `${fromClass} is the highest class`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Update all students in the class
+      const { error } = await supabase
+        .from("students")
+        .update({ class: nextClass })
+        .in("id", studentsToPromote.map(s => s.id));
+
+      if (error) throw error;
+
+      // Update local state
+      setStudents(students.map(student => 
+        studentsToPromote.find(s => s.id === student.id)
+          ? { ...student, class: nextClass }
+          : student
+      ));
+
+      toast({
+        title: "Success",
+        description: `Promoted ${studentsToPromote.length} students from ${fromClass} to ${nextClass}`,
+      });
+    } catch (error) {
+      console.error("Error promoting students:", error);
+      toast({
+        title: "Error",
+        description: "Failed to promote students",
         variant: "destructive",
       });
     }
@@ -503,7 +705,11 @@ export default function Registrar() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="icon">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => setEditingStudent(student)}
+                        >
                           <Edit2 className="w-4 h-4" />
                         </Button>
                         <Button
@@ -574,7 +780,16 @@ export default function Registrar() {
                       </div>
                     ))}
                 </div>
-                <Button className="w-full mt-6">Promote All to Class {classes[classes.indexOf(selectedClass) + 1] || selectedClass}</Button>
+                <Button 
+                  className="w-full mt-6"
+                  onClick={() => handlePromoteClass(selectedClass)}
+                  variant={selectedClass === "JHS3" ? "destructive" : "default"}
+                >
+                  {selectedClass === "JHS3" 
+                    ? `Graduate All JHS3 Students (${students.filter(s => s.class === "JHS3" && s.status === "active").length})`
+                    : `Promote All to ${classes[classes.indexOf(selectedClass) + 1] || 'Next Class'}`
+                  }
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -697,7 +912,11 @@ export default function Registrar() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="icon">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => setEditingStaff(member)}
+                        >
                           <Edit2 className="w-4 h-4" />
                         </Button>
                         <Button
@@ -717,6 +936,189 @@ export default function Registrar() {
         </TabsContent>
       </Tabs>
       )}
+
+      {/* Edit Student Dialog */}
+      <Dialog open={!!editingStudent} onOpenChange={() => setEditingStudent(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Student</DialogTitle>
+            <DialogDescription>
+              Update the student's information below
+            </DialogDescription>
+          </DialogHeader>
+          {editingStudent && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editingStudent.full_name}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, full_name: e.target.value })
+                  }
+                  placeholder="John Doe"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-dob">Date of Birth</Label>
+                <Input
+                  id="edit-dob"
+                  type="date"
+                  value={editingStudent.date_of_birth}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, date_of_birth: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-gender">Gender</Label>
+                <select
+                  id="edit-gender"
+                  value={editingStudent.gender}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, gender: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="edit-class">Class</Label>
+                <select
+                  id="edit-class"
+                  value={editingStudent.class}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, class: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                >
+                  <option value="">Select Class</option>
+                  {classes.map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="edit-parentName">Parent/Guardian Name</Label>
+                <Input
+                  id="edit-parentName"
+                  value={editingStudent.parent_name}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, parent_name: e.target.value })
+                  }
+                  placeholder="Parent's name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-parentPhone">Parent Phone Number</Label>
+                <Input
+                  id="edit-parentPhone"
+                  value={editingStudent.parent_phone}
+                  onChange={(e) =>
+                    setEditingStudent({ ...editingStudent, parent_phone: e.target.value })
+                  }
+                  placeholder="+233501234567"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setEditingStudent(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => handleEditStudent(editingStudent)} 
+                  className="flex-1"
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={!!editingStaff} onOpenChange={() => setEditingStaff(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Staff Member</DialogTitle>
+            <DialogDescription>
+              Update the staff member's information below
+            </DialogDescription>
+          </DialogHeader>
+          {editingStaff && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-staffName">Full Name</Label>
+                <Input
+                  id="edit-staffName"
+                  value={editingStaff.full_name}
+                  onChange={(e) =>
+                    setEditingStaff({ ...editingStaff, full_name: e.target.value })
+                  }
+                  placeholder="Mr./Mrs. Name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-staffPhone">Phone Number</Label>
+                <Input
+                  id="edit-staffPhone"
+                  value={editingStaff.phone}
+                  onChange={(e) =>
+                    setEditingStaff({ ...editingStaff, phone: e.target.value })
+                  }
+                  placeholder="+233501234567"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-position">Position/Role</Label>
+                <Input
+                  id="edit-position"
+                  value={editingStaff.position}
+                  onChange={(e) =>
+                    setEditingStaff({ ...editingStaff, position: e.target.value })
+                  }
+                  placeholder="Headmaster, Teacher, etc."
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-specialization">Specialization</Label>
+                <Input
+                  id="edit-specialization"
+                  value={editingStaff.specialization}
+                  onChange={(e) =>
+                    setEditingStaff({ ...editingStaff, specialization: e.target.value })
+                  }
+                  placeholder="Mathematics, English, etc."
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setEditingStaff(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => handleEditStaff(editingStaff)} 
+                  className="flex-1"
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

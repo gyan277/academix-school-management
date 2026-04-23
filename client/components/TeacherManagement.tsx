@@ -220,10 +220,37 @@ export function TeacherManagementInterface() {
         }
       }
 
-      // Step 3: Create class assignments
+      // Step 3: Create class assignments with validation
       if (data.classes && data.classes.length > 0) {
-        const currentYear = new Date().getFullYear();
-        const academicYear = `${currentYear}/${currentYear + 1}`;
+        const academicYear = "2024/2025"; // Use consistent academic year
+        
+        // Validate school_id matches for each class
+        for (const className of data.classes) {
+          const { data: studentsInClass, error: checkError } = await supabase
+            .from('students')
+            .select('school_id')
+            .eq('class', className)
+            .eq('status', 'active')
+            .limit(1);
+
+          if (checkError) {
+            console.error('Error checking class students:', checkError);
+            continue;
+          }
+
+          // If there are students in the class, verify school_id match
+          if (studentsInClass && studentsInClass.length > 0) {
+            const studentSchoolId = studentsInClass[0].school_id;
+            if (studentSchoolId && studentSchoolId !== profile?.school_id) {
+              toast({
+                title: 'School ID Mismatch',
+                description: `Cannot assign teacher to ${className}. Students in this class belong to a different school.`,
+                variant: 'destructive',
+              });
+              continue; // Skip this class assignment
+            }
+          }
+        }
         
         const classRecords = data.classes.map((className) => ({
           teacher_id: authData.user.id,
@@ -237,6 +264,14 @@ export function TeacherManagementInterface() {
 
         if (classError) {
           console.error('Class assignment error:', classError);
+          // Check if it's a school_id mismatch error from the database trigger
+          if (classError.message?.includes('school_id')) {
+            toast({
+              title: 'Class Assignment Failed',
+              description: 'Teacher and students must belong to the same school. Please check school_id settings.',
+              variant: 'destructive',
+            });
+          }
         }
       }
 
@@ -300,8 +335,43 @@ export function TeacherManagementInterface() {
       }
 
       if (data.classes && data.classes.length > 0) {
-        const currentYear = new Date().getFullYear();
-        const academicYear = `${currentYear}/${currentYear + 1}`;
+        const academicYear = "2024/2025"; // Use consistent academic year
+        
+        // Validate school_id matches for each class
+        const teacherData = await supabase
+          .from('users')
+          .select('school_id')
+          .eq('id', id)
+          .single();
+
+        if (teacherData.data?.school_id) {
+          for (const className of data.classes) {
+            const { data: studentsInClass, error: checkError } = await supabase
+              .from('students')
+              .select('school_id')
+              .eq('class', className)
+              .eq('status', 'active')
+              .limit(1);
+
+            if (checkError) {
+              console.error('Error checking class students:', checkError);
+              continue;
+            }
+
+            // If there are students in the class, verify school_id match
+            if (studentsInClass && studentsInClass.length > 0) {
+              const studentSchoolId = studentsInClass[0].school_id;
+              if (studentSchoolId && studentSchoolId !== teacherData.data.school_id) {
+                toast({
+                  title: 'School ID Mismatch',
+                  description: `Cannot assign teacher to ${className}. Students in this class belong to a different school.`,
+                  variant: 'destructive',
+                });
+                continue; // Skip this class assignment
+              }
+            }
+          }
+        }
         
         const classRecords = data.classes.map((className) => ({
           teacher_id: id,
@@ -315,6 +385,14 @@ export function TeacherManagementInterface() {
 
         if (insertError) {
           console.error('Insert classes error:', insertError);
+          // Check if it's a school_id mismatch error from the database trigger
+          if (insertError.message?.includes('school_id')) {
+            toast({
+              title: 'Class Assignment Failed',
+              description: 'Teacher and students must belong to the same school. Please check school_id settings.',
+              variant: 'destructive',
+            });
+          }
         }
       }
 

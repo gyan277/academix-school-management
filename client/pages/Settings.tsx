@@ -106,6 +106,12 @@ export default function SettingsPage() {
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [savingSubjects, setSavingSubjects] = useState(false);
 
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
   const classes = ["KG1", "KG2", "P1", "P2", "P3", "P4", "P5", "P6", "JHS1", "JHS2", "JHS3"];
   const currentAcademicYear = "2024/2025";
 
@@ -113,6 +119,9 @@ export default function SettingsPage() {
   useEffect(() => {
     loadGrades();
     loadAllSubjects();
+    loadSchoolSettings();
+    loadTerms();
+    loadEvents();
   }, []);
 
   // Load class subjects when selected class changes
@@ -167,6 +176,83 @@ export default function SettingsPage() {
         description: 'Failed to load subjects',
         variant: 'destructive',
       });
+    }
+  }
+
+  async function loadSchoolSettings() {
+    if (!profile?.school_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('school_settings')
+        .select('*')
+        .eq('school_id', profile.school_id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setSchoolName(data.school_name || '');
+        setSchoolAddress(data.school_address || '');
+        setSchoolPhone(data.school_phone || '');
+        setSchoolEmail(data.school_email || '');
+        setAcademicYear(data.current_academic_year || '2024/2025');
+        setLogoPreview(data.school_logo_url || '');
+        setSignaturePreview(data.headmaster_signature_url || '');
+      }
+    } catch (error) {
+      console.error('Error loading school settings:', error);
+    }
+  }
+
+  async function loadTerms() {
+    if (!profile?.school_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('academic_terms')
+        .select('*')
+        .eq('school_id', profile.school_id)
+        .eq('academic_year', '2024/2025')
+        .order('start_date');
+
+      if (error) throw error;
+
+      if (data) {
+        setTerms(data.map(t => ({
+          id: t.id,
+          name: t.name,
+          startDate: t.start_date,
+          endDate: t.end_date,
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading terms:', error);
+    }
+  }
+
+  async function loadEvents() {
+    if (!profile?.school_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .eq('school_id', profile.school_id)
+        .order('event_date');
+
+      if (error) throw error;
+
+      if (data) {
+        setEvents(data.map(e => ({
+          id: e.id,
+          title: e.title,
+          date: e.event_date,
+          type: e.event_type as "holiday" | "exam" | "event",
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading events:', error);
     }
   }
 
@@ -340,68 +426,169 @@ export default function SettingsPage() {
     type: "holiday",
   });
 
-  const handleAddTerm = () => {
+  const handleAddTerm = async () => {
+    if (!profile?.school_id) return;
+    
     if (newTerm.name && newTerm.startDate && newTerm.endDate) {
-      setTerms([
-        ...terms,
-        {
-          id: String(terms.length + 1),
-          ...newTerm,
-        },
-      ]);
-      setNewTerm({ name: "", startDate: "", endDate: "" });
-      setIsAddTermOpen(false);
-      toast({
-        title: "Term Added",
-        description: `${newTerm.name} has been added successfully.`,
-      });
+      try {
+        const { error } = await supabase
+          .from('academic_terms')
+          .insert({
+            school_id: profile.school_id,
+            name: newTerm.name,
+            start_date: newTerm.startDate,
+            end_date: newTerm.endDate,
+            academic_year: '2024/2025',
+          });
+
+        if (error) throw error;
+
+        await loadTerms();
+        setNewTerm({ name: "", startDate: "", endDate: "" });
+        setIsAddTermOpen(false);
+        toast({
+          title: "Term Added",
+          description: `${newTerm.name} has been added successfully.`,
+        });
+      } catch (error) {
+        console.error('Error adding term:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add term.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const handleDeleteTerm = (id: string) => {
+  const handleDeleteTerm = async (id: string) => {
     const term = terms.find((t) => t.id === id);
-    setTerms(terms.filter((t) => t.id !== id));
-    toast({
-      title: "Term Deleted",
-      description: `${term?.name} has been removed.`,
-      variant: "destructive",
-    });
-  };
+    
+    try {
+      const { error } = await supabase
+        .from('academic_terms')
+        .delete()
+        .eq('id', id);
 
-  const handleAddEvent = () => {
-    if (newEvent.title && newEvent.date) {
-      setEvents([
-        ...events,
-        {
-          id: String(events.length + 1),
-          ...newEvent,
-        },
-      ]);
-      setNewEvent({ title: "", date: "", type: "holiday" });
-      setIsAddEventOpen(false);
+      if (error) throw error;
+
+      setTerms(terms.filter((t) => t.id !== id));
       toast({
-        title: "Event Added",
-        description: `${newEvent.title} has been added to the calendar.`,
+        title: "Term Deleted",
+        description: `${term?.name} has been removed.`,
+        variant: "destructive",
+      });
+    } catch (error) {
+      console.error('Error deleting term:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete term.",
+        variant: "destructive",
       });
     }
   };
 
-  const handleDeleteEvent = (id: string) => {
-    const event = events.find((e) => e.id === id);
-    setEvents(events.filter((e) => e.id !== id));
-    toast({
-      title: "Event Deleted",
-      description: `${event?.title} has been removed.`,
-      variant: "destructive",
-    });
+  const handleAddEvent = async () => {
+    if (!profile?.school_id) return;
+    
+    if (newEvent.title && newEvent.date) {
+      try {
+        const { error } = await supabase
+          .from('calendar_events')
+          .insert({
+            school_id: profile.school_id,
+            title: newEvent.title,
+            event_date: newEvent.date,
+            event_type: newEvent.type,
+          });
+
+        if (error) throw error;
+
+        await loadEvents();
+        setNewEvent({ title: "", date: "", type: "holiday" });
+        setIsAddEventOpen(false);
+        toast({
+          title: "Event Added",
+          description: `${newEvent.title} has been added to the calendar.`,
+        });
+      } catch (error) {
+        console.error('Error adding event:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add event.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
-  const handleSaveProfile = () => {
-    // In production, this would call an API
-    toast({
-      title: "Profile Updated",
-      description: "School profile has been saved successfully.",
-    });
+  const handleDeleteEvent = async (id: string) => {
+    const event = events.find((e) => e.id === id);
+    
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setEvents(events.filter((e) => e.id !== id));
+      toast({
+        title: "Event Deleted",
+        description: `${event?.title} has been removed.`,
+        variant: "destructive",
+      });
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete event.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profile?.school_id) {
+      toast({
+        title: "Error",
+        description: "School information not found.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('school_settings')
+        .upsert({
+          school_id: profile.school_id,
+          school_name: schoolName,
+          school_address: schoolAddress,
+          school_phone: schoolPhone,
+          school_email: schoolEmail,
+          current_academic_year: academicYear,
+          school_logo_url: logoPreview,
+          headmaster_signature_url: signaturePreview,
+        }, {
+          onConflict: 'school_id',
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Profile Updated",
+        description: "School profile has been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save school profile.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
