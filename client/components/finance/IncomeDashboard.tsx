@@ -50,6 +50,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [selectedClass, setSelectedClass] = useState<string>("all");
   
   const [students, setStudents] = useState<StudentWithFees[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<StudentWithFees | null>(null);
@@ -292,10 +293,18 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
     }
   };
 
-  // Calculate summary statistics
-  const totalExpectedIncome = students.reduce((sum, s) => sum + s.total_fee, 0);
-  const totalCollected = students.reduce((sum, s) => sum + s.total_paid, 0);
-  const totalOutstanding = students.reduce((sum, s) => sum + s.balance, 0);
+  // Filter students by selected class
+  const filteredStudents = selectedClass === "all" 
+    ? students 
+    : students.filter(s => s.class === selectedClass);
+
+  // Get unique classes for filter dropdown
+  const availableClasses = Array.from(new Set(students.map(s => s.class))).sort();
+
+  // Calculate summary statistics (based on filtered students)
+  const totalExpectedIncome = filteredStudents.reduce((sum, s) => sum + s.total_fee, 0);
+  const totalCollected = filteredStudents.reduce((sum, s) => sum + s.total_paid, 0);
+  const totalOutstanding = filteredStudents.reduce((sum, s) => sum + s.balance, 0);
   const collectionRate = totalExpectedIncome > 0 ? (totalCollected / totalExpectedIncome) * 100 : 0;
 
   if (loading) {
@@ -321,7 +330,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
           </CardHeader>
           <CardContent className="pb-3">
             <div className="text-lg sm:text-2xl font-bold">GHS {totalExpectedIncome.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">{students.length} students</p>
+            <p className="text-xs text-muted-foreground">{filteredStudents.length} students</p>
           </CardContent>
         </Card>
 
@@ -344,7 +353,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
           <CardContent className="pb-3">
             <div className="text-lg sm:text-2xl font-bold text-orange-600">GHS {totalOutstanding.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              {students.filter(s => s.balance > 0).length} students with balance
+              {filteredStudents.filter(s => s.balance > 0).length} students with balance
             </p>
           </CardContent>
         </Card>
@@ -356,11 +365,11 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
           </CardHeader>
           <CardContent className="pb-3">
             <div className="text-lg sm:text-2xl font-bold">
-              {students.filter(s => s.balance <= 0).length}
+              {filteredStudents.filter(s => s.balance <= 0).length}
             </div>
             <p className="text-xs text-muted-foreground">
-              {students.length > 0 
-                ? ((students.filter(s => s.balance <= 0).length / students.length) * 100).toFixed(1)
+              {filteredStudents.length > 0 
+                ? ((filteredStudents.filter(s => s.balance <= 0).length / filteredStudents.length) * 100).toFixed(1)
                 : 0}% of students
             </p>
           </CardContent>
@@ -378,10 +387,30 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
         <TabsContent value="overview" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base sm:text-lg">Student Payment Status</CardTitle>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                View and manage student fees and payments
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base sm:text-lg">Student Payment Status</CardTitle>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    View and manage student fees and payments
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="class-filter" className="text-xs sm:text-sm whitespace-nowrap">Filter by Class:</Label>
+                  <select
+                    id="class-filter"
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    className="px-2 sm:px-3 py-1 sm:py-2 border rounded-md text-xs sm:text-sm bg-background min-w-[100px]"
+                  >
+                    <option value="all">All Classes</option>
+                    {availableClasses.map((cls) => (
+                      <option key={cls} value={cls}>
+                        {cls}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto -mx-6 px-6">
@@ -398,14 +427,16 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {students.length === 0 ? (
+                  {filteredStudents.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground text-xs sm:text-sm">
-                        No students found. Configure class fees first.
+                        {students.length === 0 
+                          ? "No students found. Configure class fees first."
+                          : "No students in this class."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    students.map((student) => (
+                    filteredStudents.map((student) => (
                       <TableRow key={student.id}>
                         <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">{student.student_number}</TableCell>
                         <TableCell className="text-xs sm:text-sm whitespace-nowrap">{student.full_name}</TableCell>
@@ -471,10 +502,30 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
         <TabsContent value="outstanding" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base sm:text-lg">Students with Outstanding Balance</CardTitle>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Students who still owe fees
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base sm:text-lg">Students with Outstanding Balance</CardTitle>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Students who still owe fees
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="class-filter-outstanding" className="text-xs sm:text-sm whitespace-nowrap">Filter by Class:</Label>
+                  <select
+                    id="class-filter-outstanding"
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    className="px-2 sm:px-3 py-1 sm:py-2 border rounded-md text-xs sm:text-sm bg-background min-w-[100px]"
+                  >
+                    <option value="all">All Classes</option>
+                    {availableClasses.map((cls) => (
+                      <option key={cls} value={cls}>
+                        {cls}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto -mx-6 px-6">
@@ -491,14 +542,16 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {students.filter(s => s.balance > 0).length === 0 ? (
+                  {filteredStudents.filter(s => s.balance > 0).length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground text-xs sm:text-sm">
-                        All students have paid their fees!
+                        {students.filter(s => s.balance > 0).length === 0
+                          ? "All students have paid their fees!"
+                          : "No outstanding balances in this class!"}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    students
+                    filteredStudents
                       .filter(s => s.balance > 0)
                       .map((student) => (
                         <TableRow key={student.id}>
