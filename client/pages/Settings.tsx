@@ -1111,34 +1111,6 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="year">Academic Year</Label>
-                    <Input
-                      id="year"
-                      value={academicYear}
-                      onChange={(e) => setAcademicYear(e.target.value)}
-                      placeholder="e.g., 2024/2025"
-                      className="mt-2"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="term">Current Term</Label>
-                    <select
-                      id="term"
-                      value={currentTerm}
-                      onChange={(e) => setCurrentTerm(e.target.value)}
-                      className="mt-2 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="Term 1">Term 1</option>
-                      <option value="Term 2">Term 2</option>
-                      <option value="Term 3">Term 3</option>
-                    </select>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  These settings will be used across all modules (Academic, Attendance, Finance, Reports, etc.)
-                </p>
                 
                 <Button onClick={handleSaveSchoolSettings} className="w-full sm:w-auto">
                   <Check className="w-4 h-4 mr-2" />

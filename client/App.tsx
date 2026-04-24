@@ -12,7 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Registrar from "./pages/Registrar";
 import Academic from "./pages/Academic";
 import Attendance from "./pages/Attendance";
-import Finance from "./pages/Finance";
+import Finance from "./pages/FinanceNew";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
