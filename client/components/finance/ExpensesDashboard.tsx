@@ -493,36 +493,36 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Expenses</CardTitle>
+            <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">GHS {totalExpenses.toFixed(2)}</div>
+          <CardContent className="pb-3">
+            <div className="text-lg sm:text-2xl font-bold">GHS {totalExpenses.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">All expenses</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Salary Expenses</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Salary Expenses</CardTitle>
+            <Users className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">GHS {totalSalaryExpenses.toFixed(2)}</div>
+          <CardContent className="pb-3">
+            <div className="text-lg sm:text-2xl font-bold">GHS {totalSalaryExpenses.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">{salaryPayments.length} payments</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Other Expenses</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Other Expenses</CardTitle>
+            <Receipt className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">GHS {totalCustomExpenses.toFixed(2)}</div>
+          <CardContent className="pb-3">
+            <div className="text-lg sm:text-2xl font-bold">GHS {totalCustomExpenses.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">{customExpenses.length} expenses</p>
           </CardContent>
         </Card>
@@ -531,8 +531,8 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="salaries">Staff Salaries</TabsTrigger>
-          <TabsTrigger value="expenses">Custom Expenses</TabsTrigger>
+          <TabsTrigger value="salaries" className="text-xs sm:text-sm">Staff Salaries</TabsTrigger>
+          <TabsTrigger value="expenses" className="text-xs sm:text-sm">Custom Expenses</TabsTrigger>
         </TabsList>
 
         {/* Staff Salaries Tab */}
@@ -540,12 +540,13 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Staff Salaries</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Staff Salaries</CardTitle>
                 <Dialog open={isSalaryDialogOpen} onOpenChange={setIsSalaryDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Salary
+                    <Button className="text-xs sm:text-sm">
+                      <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Add Salary</span>
+                      <span className="sm:hidden">Add</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
@@ -602,35 +603,37 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
               </div>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto -mx-6 px-6">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Staff Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Monthly Salary</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Staff Name</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Role</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Monthly Salary</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {staffSalaries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground text-xs sm:text-sm">
                         No salaries configured yet
                       </TableCell>
                     </TableRow>
                   ) : (
                     staffSalaries.map((salary) => (
                       <TableRow key={salary.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">
                           {salary.staff?.full_name || "Unknown"}
                         </TableCell>
-                        <TableCell>{salary.staff?.role || "-"}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">{salary.staff?.role || "-"}</TableCell>
+                        <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                           GHS {Number(salary.monthly_salary).toFixed(2)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right whitespace-nowrap">
                           <Button
                             size="sm"
+                            className="text-xs px-2 py-1"
                             onClick={() => {
                               setSelectedStaff(salary);
                               setPaymentForm({
@@ -640,7 +643,8 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
                               setIsPaymentDialogOpen(true);
                             }}
                           >
-                            Record Payment
+                            <span className="hidden sm:inline">Record Payment</span>
+                            <span className="sm:hidden">Pay</span>
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -648,51 +652,54 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
 
           {/* Recent Salary Payments */}
           <Card>
             <CardHeader>
-              <CardTitle>Recent Salary Payments</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Recent Salary Payments</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto -mx-6 px-6">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Staff Name</TableHead>
-                    <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Payment Date</TableHead>
-                    <TableHead>Method</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Staff Name</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Month</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Amount</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Payment Date</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Method</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salaryPayments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground text-xs sm:text-sm">
                         No salary payments recorded yet
                       </TableCell>
                     </TableRow>
                   ) : (
                     salaryPayments.map((payment) => (
                       <TableRow key={payment.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">
                           {payment.staff?.full_name || "Unknown"}
                         </TableCell>
-                        <TableCell>{payment.payment_month}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">{payment.payment_month}</TableCell>
+                        <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                           GHS {Number(payment.amount).toFixed(2)}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">
                           {new Date(payment.payment_date).toLocaleDateString()}
                         </TableCell>
-                        <TableCell>{payment.payment_method || "-"}</TableCell>
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">{payment.payment_method || "-"}</TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -702,12 +709,13 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Custom Expenses</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Custom Expenses</CardTitle>
                 <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button onClick={() => setEditingExpense(null)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Expense
+                    <Button onClick={() => setEditingExpense(null)} className="text-xs sm:text-sm">
+                      <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Add Expense</span>
+                      <span className="sm:hidden">Add</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
@@ -794,41 +802,43 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
               </div>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto -mx-6 px-6">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Category</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Description</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Amount</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Date</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {customExpenses.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground text-xs sm:text-sm">
                         No custom expenses recorded yet
                       </TableCell>
                     </TableRow>
                   ) : (
                     customExpenses.map((expense) => (
                       <TableRow key={expense.id}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">
                           {expense.expense_category}
                         </TableCell>
-                        <TableCell>{expense.description}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">{expense.description}</TableCell>
+                        <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                           GHS {Number(expense.amount).toFixed(2)}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">
                           {new Date(expense.expense_date).toLocaleDateString()}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="text-right whitespace-nowrap">
+                          <div className="flex justify-end gap-1 sm:gap-2">
                             <Button
                               size="sm"
                               variant="outline"
+                              className="px-2 py-1"
                               onClick={() => {
                                 setEditingExpense(expense);
                                 setExpenseForm({
@@ -842,14 +852,15 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
                                 setIsExpenseDialogOpen(true);
                               }}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                             <Button
                               size="sm"
                               variant="destructive"
+                              className="px-2 py-1"
                               onClick={() => handleDeleteExpense(expense.id)}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -858,6 +869,7 @@ export default function ExpensesDashboard({ schoolId, academicYear, term }: Expe
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

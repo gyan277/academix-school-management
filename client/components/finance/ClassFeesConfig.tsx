@@ -190,16 +190,17 @@ export default function ClassFeesConfig({ schoolId, academicYear, term }: ClassF
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Class Fees Configuration</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
+              <CardTitle className="text-base sm:text-lg">Class Fees Configuration</CardTitle>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 Set tuition, bus, and canteen fees for each class
               </p>
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => handleOpenDialog()}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Class Fee
+                <Button onClick={() => handleOpenDialog()} className="text-xs sm:text-sm">
+                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Add Class Fee</span>
+                  <span className="sm:hidden">Add</span>
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -295,15 +296,16 @@ export default function ClassFeesConfig({ schoolId, academicYear, term }: ClassF
       {/* Fees Table */}
       <Card>
         <CardContent className="pt-6">
+          <div className="overflow-x-auto -mx-6 px-6">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Class</TableHead>
-                <TableHead className="text-right">Tuition Fee</TableHead>
-                <TableHead className="text-right">Bus Fee</TableHead>
-                <TableHead className="text-right">Canteen Fee</TableHead>
-                <TableHead className="text-right">Total (Max)</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead className="text-xs sm:text-sm whitespace-nowrap">Class</TableHead>
+                <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Tuition Fee</TableHead>
+                <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Bus Fee</TableHead>
+                <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Canteen Fee</TableHead>
+                <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Total (Max)</TableHead>
+                <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -315,39 +317,41 @@ export default function ClassFeesConfig({ schoolId, academicYear, term }: ClassF
 
                 return (
                   <TableRow key={className}>
-                    <TableCell className="font-medium">{className}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">{className}</TableCell>
+                    <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                       {fee ? `GHS ${fee.fee_amount.toFixed(2)}` : "-"}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                       {fee ? `GHS ${(fee.bus_fee || 0).toFixed(2)}` : "-"}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                       {fee ? `GHS ${(fee.canteen_fee || 0).toFixed(2)}` : "-"}
                     </TableCell>
-                    <TableCell className="text-right font-semibold">
+                    <TableCell className="text-right font-semibold text-xs sm:text-sm whitespace-nowrap">
                       {fee ? `GHS ${totalMax.toFixed(2)}` : "-"}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right whitespace-nowrap">
                       {fee ? (
                         <Button
                           size="sm"
                           variant="outline"
+                          className="text-xs px-2 py-1"
                           onClick={() => handleOpenDialog(fee)}
                         >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Edit
+                          <Edit className="w-3 h-3 sm:w-4 sm:h-4 mr-0 sm:mr-1" />
+                          <span className="hidden sm:inline">Edit</span>
                         </Button>
                       ) : (
                         <Button
                           size="sm"
+                          className="text-xs px-2 py-1"
                           onClick={() => {
                             setFormData({ ...formData, class: className });
                             setIsDialogOpen(true);
                           }}
                         >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Set Fee
+                          <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-0 sm:mr-1" />
+                          <span className="hidden sm:inline">Set Fee</span>
                         </Button>
                       )}
                     </TableCell>
@@ -356,11 +360,12 @@ export default function ClassFeesConfig({ schoolId, academicYear, term }: ClassF
               })}
             </TableBody>
           </Table>
+          </div>
 
           {classFees.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              <p>No class fees configured yet.</p>
-              <p className="text-sm mt-2">Click "Add Class Fee" to get started.</p>
+              <p className="text-xs sm:text-sm">No class fees configured yet.</p>
+              <p className="text-xs sm:text-sm mt-2">Click "Add Class Fee" to get started.</p>
             </div>
           )}
         </CardContent>
@@ -369,8 +374,8 @@ export default function ClassFeesConfig({ schoolId, academicYear, term }: ClassF
       {/* Info Card */}
       <Card className="bg-muted/50">
         <CardContent className="pt-6">
-          <h4 className="font-semibold mb-2">How it works:</h4>
-          <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+          <h4 className="font-semibold mb-2 text-sm sm:text-base">How it works:</h4>
+          <ul className="text-xs sm:text-sm text-muted-foreground space-y-1 list-disc list-inside">
             <li>Set default fees for each class (tuition, bus, canteen)</li>
             <li>Students are automatically billed based on their class</li>
             <li>Bus and canteen fees are optional - only charged if student uses them</li>

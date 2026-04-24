@@ -313,36 +313,36 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expected Income</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Expected Income</CardTitle>
+            <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">GHS {totalExpectedIncome.toFixed(2)}</div>
+          <CardContent className="pb-3">
+            <div className="text-lg sm:text-2xl font-bold">GHS {totalExpectedIncome.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">{students.length} students</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Collected</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Collected</CardTitle>
+            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">GHS {totalCollected.toFixed(2)}</div>
+          <CardContent className="pb-3">
+            <div className="text-lg sm:text-2xl font-bold text-green-600">GHS {totalCollected.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">{collectionRate.toFixed(1)}% collected</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
-            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Outstanding</CardTitle>
+            <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">GHS {totalOutstanding.toFixed(2)}</div>
+          <CardContent className="pb-3">
+            <div className="text-lg sm:text-2xl font-bold text-orange-600">GHS {totalOutstanding.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
               {students.filter(s => s.balance > 0).length} students with balance
             </p>
@@ -351,11 +351,11 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fully Paid</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Fully Paid</CardTitle>
+            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="pb-3">
+            <div className="text-lg sm:text-2xl font-bold">
               {students.filter(s => s.balance <= 0).length}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -370,20 +370,21 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="overview">Student Balances</TabsTrigger>
-          <TabsTrigger value="outstanding">Outstanding Only</TabsTrigger>
+          <TabsTrigger value="overview" className="text-xs sm:text-sm">Student Balances</TabsTrigger>
+          <TabsTrigger value="outstanding" className="text-xs sm:text-sm">Outstanding Only</TabsTrigger>
         </TabsList>
 
         {/* All Students Tab */}
         <TabsContent value="overview" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Student Payment Status</CardTitle>
-              <p className="text-sm text-muted-foreground">
+              <CardTitle className="text-base sm:text-lg">Student Payment Status</CardTitle>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 View and manage student fees and payments
               </p>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto -mx-6 px-6">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -399,31 +400,32 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                 <TableBody>
                   {students.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground text-xs sm:text-sm">
                         No students found. Configure class fees first.
                       </TableCell>
                     </TableRow>
                   ) : (
                     students.map((student) => (
                       <TableRow key={student.id}>
-                        <TableCell className="font-medium">{student.student_number}</TableCell>
-                        <TableCell>{student.full_name}</TableCell>
-                        <TableCell>{student.class}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">{student.student_number}</TableCell>
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">{student.full_name}</TableCell>
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">{student.class}</TableCell>
+                        <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                           GHS {student.total_fee.toFixed(2)}
                         </TableCell>
-                        <TableCell className="text-right text-green-600">
+                        <TableCell className="text-right text-green-600 text-xs sm:text-sm whitespace-nowrap">
                           GHS {student.total_paid.toFixed(2)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${
+                        <TableCell className={`text-right font-semibold text-xs sm:text-sm whitespace-nowrap ${
                           student.balance > 0 ? "text-orange-600" : "text-green-600"
                         }`}>
                           GHS {student.balance.toFixed(2)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="text-right whitespace-nowrap">
+                          <div className="flex justify-end gap-1 sm:gap-2">
                             <Button
                               size="sm"
+                              className="text-xs px-2 py-1"
                               onClick={() => {
                                 setSelectedStudent(student);
                                 setPaymentForm({
@@ -433,11 +435,13 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                                 setIsPaymentDialogOpen(true);
                               }}
                             >
-                              Record Payment
+                              <span className="hidden sm:inline">Record Payment</span>
+                              <span className="sm:hidden">Pay</span>
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
+                              className="px-2 py-1"
                               onClick={() => {
                                 setSelectedStudent(student);
                                 setOverrideForm({
@@ -449,7 +453,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                                 setIsOverrideDialogOpen(true);
                               }}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -458,6 +462,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -466,28 +471,29 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
         <TabsContent value="outstanding" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Students with Outstanding Balance</CardTitle>
-              <p className="text-sm text-muted-foreground">
+              <CardTitle className="text-base sm:text-lg">Students with Outstanding Balance</CardTitle>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Students who still owe fees
               </p>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto -mx-6 px-6">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Student Number</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead className="text-right">Total Fee</TableHead>
-                    <TableHead className="text-right">Paid</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Student Number</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Name</TableHead>
+                    <TableHead className="text-xs sm:text-sm whitespace-nowrap">Class</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Total Fee</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Paid</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Balance</TableHead>
+                    <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {students.filter(s => s.balance > 0).length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground text-xs sm:text-sm">
                         All students have paid their fees!
                       </TableCell>
                     </TableRow>
@@ -496,21 +502,22 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                       .filter(s => s.balance > 0)
                       .map((student) => (
                         <TableRow key={student.id}>
-                          <TableCell className="font-medium">{student.student_number}</TableCell>
-                          <TableCell>{student.full_name}</TableCell>
-                          <TableCell>{student.class}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">{student.student_number}</TableCell>
+                          <TableCell className="text-xs sm:text-sm whitespace-nowrap">{student.full_name}</TableCell>
+                          <TableCell className="text-xs sm:text-sm whitespace-nowrap">{student.class}</TableCell>
+                          <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap">
                             GHS {student.total_fee.toFixed(2)}
                           </TableCell>
-                          <TableCell className="text-right text-green-600">
+                          <TableCell className="text-right text-green-600 text-xs sm:text-sm whitespace-nowrap">
                             GHS {student.total_paid.toFixed(2)}
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-orange-600">
+                          <TableCell className="text-right font-semibold text-orange-600 text-xs sm:text-sm whitespace-nowrap">
                             GHS {student.balance.toFixed(2)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right whitespace-nowrap">
                             <Button
                               size="sm"
+                              className="text-xs px-2 py-1"
                               onClick={() => {
                                 setSelectedStudent(student);
                                 setPaymentForm({
@@ -520,7 +527,8 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                                 setIsPaymentDialogOpen(true);
                               }}
                             >
-                              Record Payment
+                              <span className="hidden sm:inline">Record Payment</span>
+                              <span className="sm:hidden">Pay</span>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -528,6 +536,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

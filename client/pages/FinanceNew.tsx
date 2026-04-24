@@ -27,18 +27,21 @@ export default function Finance() {
     <Layout title="Finance" subtitle="Manage income, expenses, and class fees">
       <div className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-3">
-            <TabsTrigger value="income" className="gap-2">
-              <DollarSign className="w-4 h-4" />
-              Income
+          <TabsList className="grid w-full grid-cols-3 h-auto">
+            <TabsTrigger value="income" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2">
+              <DollarSign className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Income</span>
+              <span className="sm:hidden">Income</span>
             </TabsTrigger>
-            <TabsTrigger value="expenses" className="gap-2">
-              <TrendingDown className="w-4 h-4" />
-              Expenses
+            <TabsTrigger value="expenses" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2">
+              <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Expenses</span>
+              <span className="sm:hidden">Expenses</span>
             </TabsTrigger>
-            <TabsTrigger value="class-fees" className="gap-2">
-              <Settings className="w-4 h-4" />
-              Class Fees
+            <TabsTrigger value="class-fees" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2">
+              <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Class Fees</span>
+              <span className="sm:hidden">Fees</span>
             </TabsTrigger>
           </TabsList>
 
