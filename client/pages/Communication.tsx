@@ -38,7 +38,7 @@ export default function Communication() {
   const [creditBalance] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const classes = ["KG1", "KG2", "P1", "P2", "P3", "P4", "P5", "P6", "JHS1", "JHS2", "JHS3"];
+  const classes = ["Creche", "Nursery 1", "Nursery 2", "KG1", "KG2", "Primary 1", "Primary 2", "Primary 3", "Primary 4", "Primary 5", "Primary 6", "JHS 1", "JHS 2", "JHS 3"];
 
   // Handle recipient selection
   const handleSelectAll = () => {

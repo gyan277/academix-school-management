@@ -40,8 +40,14 @@ interface StudentWithFees {
   bus_fee: number;
   canteen_fee: number;
   total_fee: number;
+  tuition_paid: number;
+  bus_paid: number;
+  canteen_paid: number;
   total_paid: number;
-  balance: number;
+  tuition_balance: number;
+  bus_balance: number;
+  canteen_balance: number;
+  total_balance: number;
   uses_bus: boolean;
   uses_canteen: boolean;
 }
@@ -58,8 +64,9 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
   const [isOverrideDialogOpen, setIsOverrideDialogOpen] = useState(false);
   
   const [paymentForm, setPaymentForm] = useState({
-    amount: "",
-    payment_type: "tuition" as "tuition" | "bus" | "canteen",
+    tuition_amount: "",
+    bus_amount: "",
+    canteen_amount: "",
     payment_date: new Date().toISOString().split("T")[0],
     payment_method: "cash",
     reference_number: "",
@@ -141,7 +148,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
         }
       });
 
-      // Calculate fees for each student
+      // Calculate fees for each student with separate payment tracking
       const studentsWithFees: StudentWithFees[] = (studentsData || []).map(student => {
         const classFee = classFeeMap.get(student.class);
         const override = overrideMap.get(student.id);
@@ -160,8 +167,18 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
         }
 
         const total_fee = tuition_fee + bus_fee + canteen_fee;
-        const total_paid = payments.tuition + payments.bus + payments.canteen;
-        const balance = total_fee - total_paid;
+        
+        // Separate payment tracking
+        const tuition_paid = payments.tuition;
+        const bus_paid = payments.bus;
+        const canteen_paid = payments.canteen;
+        const total_paid = tuition_paid + bus_paid + canteen_paid;
+        
+        // Separate balance tracking
+        const tuition_balance = tuition_fee - tuition_paid;
+        const bus_balance = bus_fee - bus_paid;
+        const canteen_balance = canteen_fee - canteen_paid;
+        const total_balance = total_fee - total_paid;
 
         return {
           id: student.id,
@@ -172,8 +189,14 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
           bus_fee,
           canteen_fee,
           total_fee,
+          tuition_paid,
+          bus_paid,
+          canteen_paid,
           total_paid,
-          balance,
+          tuition_balance,
+          bus_balance,
+          canteen_balance,
+          total_balance,
           uses_bus: override?.uses_bus || false,
           uses_canteen: override?.uses_canteen || false,
         };
@@ -194,10 +217,24 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
   };
 
   const handleRecordPayment = async () => {
-    if (!selectedStudent || !paymentForm.amount) {
+    if (!selectedStudent) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "No student selected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if at least one payment amount is entered
+    const tuitionAmt = parseFloat(paymentForm.tuition_amount) || 0;
+    const busAmt = parseFloat(paymentForm.bus_amount) || 0;
+    const canteenAmt = parseFloat(paymentForm.canteen_amount) || 0;
+
+    if (tuitionAmt === 0 && busAmt === 0 && canteenAmt === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter at least one payment amount",
         variant: "destructive",
       });
       return;
@@ -205,31 +242,73 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      const payments = [];
 
-      const { error } = await supabase.from("payments").insert({
-        school_id: schoolId,
-        student_id: selectedStudent.id,
-        amount: parseFloat(paymentForm.amount),
-        payment_type: paymentForm.payment_type,
-        payment_date: paymentForm.payment_date,
-        payment_method: paymentForm.payment_method,
-        reference_number: paymentForm.reference_number || null,
-        notes: paymentForm.notes || null,
-        recorded_by: user?.id,
-      });
+      // Prepare tuition payment
+      if (tuitionAmt > 0) {
+        payments.push({
+          school_id: schoolId,
+          student_id: selectedStudent.id,
+          student_fee_id: null,
+          amount: tuitionAmt,
+          payment_type: "tuition",
+          payment_date: paymentForm.payment_date,
+          payment_method: paymentForm.payment_method,
+          reference_number: paymentForm.reference_number || null,
+          notes: paymentForm.notes ? `Tuition: ${paymentForm.notes}` : "Tuition payment",
+          recorded_by: user?.id,
+        });
+      }
+
+      // Prepare bus payment
+      if (busAmt > 0) {
+        payments.push({
+          school_id: schoolId,
+          student_id: selectedStudent.id,
+          student_fee_id: null,
+          amount: busAmt,
+          payment_type: "bus",
+          payment_date: paymentForm.payment_date,
+          payment_method: paymentForm.payment_method,
+          reference_number: paymentForm.reference_number || null,
+          notes: paymentForm.notes ? `Bus: ${paymentForm.notes}` : "Bus fee payment",
+          recorded_by: user?.id,
+        });
+      }
+
+      // Prepare canteen payment
+      if (canteenAmt > 0) {
+        payments.push({
+          school_id: schoolId,
+          student_id: selectedStudent.id,
+          student_fee_id: null,
+          amount: canteenAmt,
+          payment_type: "canteen",
+          payment_date: paymentForm.payment_date,
+          payment_method: paymentForm.payment_method,
+          reference_number: paymentForm.reference_number || null,
+          notes: paymentForm.notes ? `Canteen: ${paymentForm.notes}` : "Canteen fee payment",
+          recorded_by: user?.id,
+        });
+      }
+
+      // Insert all payments at once
+      const { error } = await supabase.from("payments").insert(payments);
 
       if (error) throw error;
 
+      const totalPaid = tuitionAmt + busAmt + canteenAmt;
       toast({
-        title: "Payment Recorded",
-        description: `Payment of GHS ${paymentForm.amount} recorded successfully`,
+        title: "Payments Recorded",
+        description: `Total of GHS ${totalPaid.toFixed(2)} recorded successfully (${payments.length} payment${payments.length > 1 ? 's' : ''})`,
       });
 
       setIsPaymentDialogOpen(false);
       setSelectedStudent(null);
       setPaymentForm({
-        amount: "",
-        payment_type: "tuition",
+        tuition_amount: "",
+        bus_amount: "",
+        canteen_amount: "",
         payment_date: new Date().toISOString().split("T")[0],
         payment_method: "cash",
         reference_number: "",
@@ -301,10 +380,22 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
   // Get unique classes for filter dropdown
   const availableClasses = Array.from(new Set(students.map(s => s.class))).sort();
 
-  // Calculate summary statistics (based on filtered students)
+  // Calculate summary statistics (based on filtered students) - SEPARATE TRACKING
+  const totalTuitionExpected = filteredStudents.reduce((sum, s) => sum + s.tuition_fee, 0);
+  const totalBusExpected = filteredStudents.reduce((sum, s) => sum + s.bus_fee, 0);
+  const totalCanteenExpected = filteredStudents.reduce((sum, s) => sum + s.canteen_fee, 0);
   const totalExpectedIncome = filteredStudents.reduce((sum, s) => sum + s.total_fee, 0);
+  
+  const totalTuitionCollected = filteredStudents.reduce((sum, s) => sum + s.tuition_paid, 0);
+  const totalBusCollected = filteredStudents.reduce((sum, s) => sum + s.bus_paid, 0);
+  const totalCanteenCollected = filteredStudents.reduce((sum, s) => sum + s.canteen_paid, 0);
   const totalCollected = filteredStudents.reduce((sum, s) => sum + s.total_paid, 0);
-  const totalOutstanding = filteredStudents.reduce((sum, s) => sum + s.balance, 0);
+  
+  const totalTuitionOutstanding = filteredStudents.reduce((sum, s) => sum + s.tuition_balance, 0);
+  const totalBusOutstanding = filteredStudents.reduce((sum, s) => sum + s.bus_balance, 0);
+  const totalCanteenOutstanding = filteredStudents.reduce((sum, s) => sum + s.canteen_balance, 0);
+  const totalOutstanding = filteredStudents.reduce((sum, s) => sum + s.total_balance, 0);
+  
   const collectionRate = totalExpectedIncome > 0 ? (totalCollected / totalExpectedIncome) * 100 : 0;
 
   if (loading) {
@@ -321,59 +412,193 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
+      {/* Revenue Overview - Total Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card>
+        <Card className="border-l-4 border-l-primary">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Expected Income</CardTitle>
-            <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Expected Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
           </CardHeader>
           <CardContent className="pb-3">
-            <div className="text-lg sm:text-2xl font-bold">GHS {totalExpectedIncome.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">{filteredStudents.length} students</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Collected</CardTitle>
-            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-          </CardHeader>
-          <CardContent className="pb-3">
-            <div className="text-lg sm:text-2xl font-bold text-green-600">GHS {totalCollected.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">{collectionRate.toFixed(1)}% collected</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Outstanding</CardTitle>
-            <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent className="pb-3">
-            <div className="text-lg sm:text-2xl font-bold text-orange-600">GHS {totalOutstanding.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              {filteredStudents.filter(s => s.balance > 0).length} students with balance
+            <div className="text-xl sm:text-3xl font-bold text-primary">GHS {totalExpectedIncome.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              All services combined
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-green-600">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Fully Paid</CardTitle>
-            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Collected</CardTitle>
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
           </CardHeader>
           <CardContent className="pb-3">
-            <div className="text-lg sm:text-2xl font-bold">
-              {filteredStudents.filter(s => s.balance <= 0).length}
+            <div className="text-xl sm:text-3xl font-bold text-green-600">GHS {totalCollected.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {collectionRate.toFixed(1)}% collection rate
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-orange-600">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Outstanding</CardTitle>
+            <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
+          </CardHeader>
+          <CardContent className="pb-3">
+            <div className="text-xl sm:text-3xl font-bold text-orange-600">GHS {totalOutstanding.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Pending collection
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-accent">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Students Status</CardTitle>
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-accent" />
+          </CardHeader>
+          <CardContent className="pb-3">
+            <div className="text-xl sm:text-3xl font-bold text-accent">
+              {filteredStudents.filter(s => s.total_balance <= 0).length}/{filteredStudents.length}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {filteredStudents.length > 0 
-                ? ((filteredStudents.filter(s => s.balance <= 0).length / filteredStudents.length) * 100).toFixed(1)
-                : 0}% of students
+            <p className="text-xs text-muted-foreground mt-1">
+              Fully paid students
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Revenue Breakdown by Service Type */}
+      <div>
+        <h3 className="text-base sm:text-lg font-semibold mb-3">Revenue Breakdown by Service</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Tuition Revenue Card */}
+          <Card className="border-t-4 border-t-primary">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <DollarSign className="h-4 w-4 text-primary" />
+                </div>
+                Tuition Fees
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Expected</span>
+                  <span className="text-sm font-semibold">GHS {totalTuitionExpected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Collected</span>
+                  <span className="text-sm font-bold text-green-600">GHS {totalTuitionCollected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Outstanding</span>
+                  <span className="text-sm font-bold text-orange-600">GHS {totalTuitionOutstanding.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-medium">Collection Rate</span>
+                  <span className="text-sm font-bold text-primary">
+                    {totalTuitionExpected > 0 ? ((totalTuitionCollected / totalTuitionExpected) * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2 mt-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full transition-all"
+                    style={{ width: `${totalTuitionExpected > 0 ? (totalTuitionCollected / totalTuitionExpected) * 100 : 0}%` }}
+                  ></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bus Revenue Card */}
+          <Card className="border-t-4 border-t-secondary">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-secondary/10 flex items-center justify-center">
+                  <DollarSign className="h-4 w-4 text-secondary" />
+                </div>
+                Bus Fees
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Expected</span>
+                  <span className="text-sm font-semibold">GHS {totalBusExpected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Collected</span>
+                  <span className="text-sm font-bold text-green-600">GHS {totalBusCollected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Outstanding</span>
+                  <span className="text-sm font-bold text-orange-600">GHS {totalBusOutstanding.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-medium">Collection Rate</span>
+                  <span className="text-sm font-bold text-secondary">
+                    {totalBusExpected > 0 ? ((totalBusCollected / totalBusExpected) * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2 mt-2">
+                  <div 
+                    className="bg-secondary h-2 rounded-full transition-all"
+                    style={{ width: `${totalBusExpected > 0 ? (totalBusCollected / totalBusExpected) * 100 : 0}%` }}
+                  ></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Canteen Revenue Card */}
+          <Card className="border-t-4 border-t-accent">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center">
+                  <DollarSign className="h-4 w-4 text-accent" />
+                </div>
+                Canteen Fees
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Expected</span>
+                  <span className="text-sm font-semibold">GHS {totalCanteenExpected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Collected</span>
+                  <span className="text-sm font-bold text-green-600">GHS {totalCanteenCollected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Outstanding</span>
+                  <span className="text-sm font-bold text-orange-600">GHS {totalCanteenOutstanding.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-medium">Collection Rate</span>
+                  <span className="text-sm font-bold text-accent">
+                    {totalCanteenExpected > 0 ? ((totalCanteenCollected / totalCanteenExpected) * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2 mt-2">
+                  <div 
+                    className="bg-accent h-2 rounded-full transition-all"
+                    style={{ width: `${totalCanteenExpected > 0 ? (totalCanteenCollected / totalCanteenExpected) * 100 : 0}%` }}
+                  ></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -448,9 +673,9 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                           GHS {student.total_paid.toFixed(2)}
                         </TableCell>
                         <TableCell className={`text-right font-semibold text-xs sm:text-sm whitespace-nowrap ${
-                          student.balance > 0 ? "text-orange-600" : "text-green-600"
+                          student.total_balance > 0 ? "text-orange-600" : "text-green-600"
                         }`}>
-                          GHS {student.balance.toFixed(2)}
+                          GHS {student.total_balance.toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="flex justify-end gap-1 sm:gap-2">
@@ -460,8 +685,13 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                               onClick={() => {
                                 setSelectedStudent(student);
                                 setPaymentForm({
-                                  ...paymentForm,
-                                  amount: student.balance > 0 ? student.balance.toString() : "",
+                                  tuition_amount: "",
+                                  bus_amount: "",
+                                  canteen_amount: "",
+                                  payment_date: new Date().toISOString().split("T")[0],
+                                  payment_method: "cash",
+                                  reference_number: "",
+                                  notes: "",
                                 });
                                 setIsPaymentDialogOpen(true);
                               }}
@@ -542,17 +772,17 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredStudents.filter(s => s.balance > 0).length === 0 ? (
+                  {filteredStudents.filter(s => s.total_balance > 0).length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground text-xs sm:text-sm">
-                        {students.filter(s => s.balance > 0).length === 0
+                        {students.filter(s => s.total_balance > 0).length === 0
                           ? "All students have paid their fees!"
                           : "No outstanding balances in this class!"}
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredStudents
-                      .filter(s => s.balance > 0)
+                      .filter(s => s.total_balance > 0)
                       .map((student) => (
                         <TableRow key={student.id}>
                           <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">{student.student_number}</TableCell>
@@ -565,7 +795,7 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                             GHS {student.total_paid.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right font-semibold text-orange-600 text-xs sm:text-sm whitespace-nowrap">
-                            GHS {student.balance.toFixed(2)}
+                            GHS {student.total_balance.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right whitespace-nowrap">
                             <Button
@@ -574,8 +804,13 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
                               onClick={() => {
                                 setSelectedStudent(student);
                                 setPaymentForm({
-                                  ...paymentForm,
-                                  amount: student.balance.toString(),
+                                  tuition_amount: "",
+                                  bus_amount: "",
+                                  canteen_amount: "",
+                                  payment_date: new Date().toISOString().split("T")[0],
+                                  payment_method: "cash",
+                                  reference_number: "",
+                                  notes: "",
                                 });
                                 setIsPaymentDialogOpen(true);
                               }}
@@ -595,116 +830,265 @@ export default function IncomeDashboard({ schoolId, academicYear, term }: Income
         </TabsContent>
       </Tabs>
 
-      {/* Record Payment Dialog */}
+      {/* Record Payment Dialog - Multi-Step Cart Style */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              Record payment for {selectedStudent?.full_name} ({selectedStudent?.student_number})
+              Enter payment amounts for {selectedStudent?.full_name} ({selectedStudent?.student_number})
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Current Balance Summary */}
             <div className="p-4 bg-muted rounded-lg">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Tuition Fee:</span>
-                  <span className="ml-2 font-medium">GHS {selectedStudent?.tuition_fee.toFixed(2)}</span>
+              <h4 className="font-semibold mb-3 text-sm">Current Outstanding Balance</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tuition:</span>
+                  <span className="font-medium text-orange-600">
+                    GHS {selectedStudent?.tuition_balance.toFixed(2)}
+                  </span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Bus Fee:</span>
-                  <span className="ml-2 font-medium">GHS {selectedStudent?.bus_fee.toFixed(2)}</span>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Paid:</span>
+                  <span className="font-medium text-green-600">
+                    GHS {selectedStudent?.tuition_paid.toFixed(2)}
+                  </span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Canteen Fee:</span>
-                  <span className="ml-2 font-medium">GHS {selectedStudent?.canteen_fee.toFixed(2)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Total Fee:</span>
-                  <span className="ml-2 font-semibold">GHS {selectedStudent?.total_fee.toFixed(2)}</span>
-                </div>
-                <div className="col-span-2 pt-2 border-t">
-                  <span className="text-muted-foreground">Outstanding Balance:</span>
-                  <span className="ml-2 font-bold text-orange-600">
-                    GHS {selectedStudent?.balance.toFixed(2)}
+                {selectedStudent?.uses_bus && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Bus:</span>
+                      <span className="font-medium text-orange-600">
+                        GHS {selectedStudent?.bus_balance.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Paid:</span>
+                      <span className="font-medium text-green-600">
+                        GHS {selectedStudent?.bus_paid.toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {selectedStudent?.uses_canteen && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Canteen:</span>
+                      <span className="font-medium text-orange-600">
+                        GHS {selectedStudent?.canteen_balance.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Paid:</span>
+                      <span className="font-medium text-green-600">
+                        GHS {selectedStudent?.canteen_paid.toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="col-span-2 pt-2 border-t flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Total Outstanding:</span>
+                  <span className="font-bold text-orange-600">
+                    GHS {selectedStudent?.total_balance.toFixed(2)}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div>
-              <Label>Payment Type *</Label>
-              <select
-                value={paymentForm.payment_type}
-                onChange={(e) => setPaymentForm({ ...paymentForm, payment_type: e.target.value as any })}
-                className="w-full px-3 py-2 border rounded-md mt-2"
-              >
-                <option value="tuition">Tuition</option>
-                <option value="bus">Bus Fee</option>
-                <option value="canteen">Canteen Fee</option>
-              </select>
+            {/* Payment Entry Section */}
+            <div className="space-y-4">
+              <h4 className="font-semibold text-sm">Enter Payment Amounts</h4>
+              
+              {/* Tuition Payment */}
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="tuition_amount" className="font-medium">Tuition Payment</Label>
+                  <span className="text-xs text-muted-foreground">
+                    Balance: GHS {selectedStudent?.tuition_balance.toFixed(2)}
+                  </span>
+                </div>
+                <Input
+                  id="tuition_amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={paymentForm.tuition_amount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, tuition_amount: e.target.value })}
+                  className="text-lg font-semibold"
+                />
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPaymentForm({ ...paymentForm, tuition_amount: selectedStudent?.tuition_balance.toFixed(2) || "" })}
+                  >
+                    Pay Full Balance
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPaymentForm({ ...paymentForm, tuition_amount: "" })}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+
+              {/* Bus Payment */}
+              {selectedStudent?.uses_bus && (
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label htmlFor="bus_amount" className="font-medium">Bus Fee Payment</Label>
+                    <span className="text-xs text-muted-foreground">
+                      Balance: GHS {selectedStudent?.bus_balance.toFixed(2)}
+                    </span>
+                  </div>
+                  <Input
+                    id="bus_amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={paymentForm.bus_amount}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, bus_amount: e.target.value })}
+                    className="text-lg font-semibold"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPaymentForm({ ...paymentForm, bus_amount: selectedStudent?.bus_balance.toFixed(2) || "" })}
+                    >
+                      Pay Full Balance
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPaymentForm({ ...paymentForm, bus_amount: "" })}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Canteen Payment */}
+              {selectedStudent?.uses_canteen && (
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label htmlFor="canteen_amount" className="font-medium">Canteen Fee Payment</Label>
+                    <span className="text-xs text-muted-foreground">
+                      Balance: GHS {selectedStudent?.canteen_balance.toFixed(2)}
+                    </span>
+                  </div>
+                  <Input
+                    id="canteen_amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={paymentForm.canteen_amount}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, canteen_amount: e.target.value })}
+                    className="text-lg font-semibold"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPaymentForm({ ...paymentForm, canteen_amount: selectedStudent?.canteen_balance.toFixed(2) || "" })}
+                    >
+                      Pay Full Balance
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPaymentForm({ ...paymentForm, canteen_amount: "" })}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Total Payment Summary */}
+              <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg border-2 border-green-200 dark:border-green-800">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold">Total Payment Amount:</span>
+                  <span className="text-2xl font-bold text-green-600">
+                    GHS {(
+                      (parseFloat(paymentForm.tuition_amount) || 0) +
+                      (parseFloat(paymentForm.bus_amount) || 0) +
+                      (parseFloat(paymentForm.canteen_amount) || 0)
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <Label>Amount (GHS) *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                className="mt-2"
-              />
+            {/* Payment Details */}
+            <div className="space-y-4 pt-4 border-t">
+              <h4 className="font-semibold text-sm">Payment Details</h4>
+              
+              <div>
+                <Label>Payment Date *</Label>
+                <Input
+                  type="date"
+                  value={paymentForm.payment_date}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label>Payment Method *</Label>
+                <select
+                  value={paymentForm.payment_method}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md mt-2"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="mobile_money">Mobile Money</option>
+                </select>
+              </div>
+
+              <div>
+                <Label>Reference Number</Label>
+                <Input
+                  placeholder="Optional reference number"
+                  value={paymentForm.reference_number}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, reference_number: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label>Notes</Label>
+                <Input
+                  placeholder="Optional notes"
+                  value={paymentForm.notes}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
             </div>
 
-            <div>
-              <Label>Payment Date *</Label>
-              <Input
-                type="date"
-                value={paymentForm.payment_date}
-                onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
-                className="mt-2"
-              />
-            </div>
-
-            <div>
-              <Label>Payment Method</Label>
-              <select
-                value={paymentForm.payment_method}
-                onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md mt-2"
-              >
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cheque">Cheque</option>
-                <option value="mobile_money">Mobile Money</option>
-              </select>
-            </div>
-
-            <div>
-              <Label>Reference Number</Label>
-              <Input
-                placeholder="Optional reference number"
-                value={paymentForm.reference_number}
-                onChange={(e) => setPaymentForm({ ...paymentForm, reference_number: e.target.value })}
-                className="mt-2"
-              />
-            </div>
-
-            <div>
-              <Label>Notes</Label>
-              <Input
-                placeholder="Optional notes"
-                value={paymentForm.notes}
-                onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                className="mt-2"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-2 pt-4 border-t">
               <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleRecordPayment}>Record Payment</Button>
+              <Button onClick={handleRecordPayment} className="bg-green-600 hover:bg-green-700">
+                <DollarSign className="w-4 h-4 mr-2" />
+                Make Payment
+              </Button>
             </div>
           </div>
         </DialogContent>

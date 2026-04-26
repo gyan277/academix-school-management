@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import { Button } from "@/components/ui/button";
-import { Menu, Bell, User, Calendar } from "lucide-react";
+import { Menu, Bell, User, Calendar, DollarSign, UserPlus, Receipt, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
@@ -15,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,12 +28,99 @@ interface LayoutProps {
   subtitle?: string;
 }
 
+interface Activity {
+  id: string;
+  activity_type: string;
+  title: string;
+  description: string;
+  created_at: string;
+  metadata?: any;
+}
+
 export default function Layout({ children, title, subtitle }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const { userName, userRole, loading, profile } = useAuth();
   const { academicYear, term } = useAcademicYear();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Load recent activities
+  useEffect(() => {
+    if (profile?.school_id) {
+      loadActivities();
+      
+      // Set up real-time subscription
+      const channel = supabase
+        .channel('activity_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'activity_log',
+            filter: `school_id=eq.${profile.school_id}`
+          },
+          () => {
+            loadActivities();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [profile?.school_id]);
+
+  const loadActivities = async () => {
+    if (!profile?.school_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('*')
+        .eq('school_id', profile.school_id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      setActivities(data || []);
+      setUnreadCount(data?.length || 0);
+    } catch (error) {
+      console.error('Error loading activities:', error);
+    }
+  };
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'payment':
+        return <DollarSign className="w-4 h-4 text-green-600" />;
+      case 'student_registered':
+        return <UserPlus className="w-4 h-4 text-blue-600" />;
+      case 'expense_added':
+        return <Receipt className="w-4 h-4 text-orange-600" />;
+      case 'score_entered':
+        return <BookOpen className="w-4 h-4 text-purple-600" />;
+      default:
+        return <Bell className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return date.toLocaleDateString();
+  };
 
   const getRoleBadge = () => {
     switch (userRole) {
@@ -177,10 +270,70 @@ export default function Layout({ children, title, subtitle }: LayoutProps) {
                 </div>
               )}
 
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5 text-muted-foreground" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-              </Button>
+              <Popover open={notificationOpen} onOpenChange={setNotificationOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative">
+                    <Bell className="w-5 h-5 text-muted-foreground" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 w-5 h-5 bg-destructive text-white text-xs rounded-full flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-96 p-0" align="end">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <h3 className="font-semibold">Recent Activities</h3>
+                    {activities.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => {
+                          setUnreadCount(0);
+                          setNotificationOpen(false);
+                        }}
+                      >
+                        Mark all as read
+                      </Button>
+                    )}
+                  </div>
+                  <ScrollArea className="h-[400px]">
+                    {activities.length === 0 ? (
+                      <div className="p-8 text-center text-muted-foreground">
+                        <Bell className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                        <p className="text-sm">No recent activities</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {activities.map((activity) => (
+                          <div
+                            key={activity.id}
+                            className="p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="mt-1">
+                                {getActivityIcon(activity.activity_type)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground">
+                                  {activity.title}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                  {activity.description}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  {formatTimeAgo(activity.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
               <div className="flex items-center space-x-3 pl-4 border-l border-border">
                 {loading ? (
                   // Loading skeleton for user info
